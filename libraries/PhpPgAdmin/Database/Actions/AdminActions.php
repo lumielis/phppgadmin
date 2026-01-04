@@ -2,6 +2,7 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
+use PhpPgAdmin\Database\ArrayRecordSet;
 use PhpPgAdmin\Database\AbstractActions;
 
 class AdminActions extends AbstractActions
@@ -261,4 +262,63 @@ class AdminActions extends AbstractActions
             return -1;
     }
 
+    /**
+     * Returns all available autovacuum per table information.
+     * @param $table if given, return autovacuum info for the given table or return all information for all tables
+     *
+     * @return ArrayRecordSet A recordset
+     */
+    function getTableAutovacuum($table = '')
+    {
+
+        $sql = '';
+
+        if ($table !== '') {
+            $this->connection->clean($table);
+            $c_schema = $this->connection->_schema;
+            $this->connection->clean($c_schema);
+
+            $sql = "SELECT c.oid, nspname, relname, pg_catalog.array_to_string(reloptions, E',') AS reloptions
+				FROM pg_class c
+					LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+				WHERE c.relkind = 'r'::\"char\"
+					AND n.nspname NOT IN ('pg_catalog','information_schema')
+					AND c.reloptions IS NOT NULL
+					AND c.relname = '{$table}' AND n.nspname = '{$c_schema}'
+				ORDER BY nspname, relname";
+        } else {
+            $sql = "SELECT c.oid, nspname, relname, pg_catalog.array_to_string(reloptions, E',') AS reloptions
+				FROM pg_class c
+					LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+				WHERE c.relkind = 'r'::\"char\"
+					AND n.nspname NOT IN ('pg_catalog','information_schema')
+					AND c.reloptions IS NOT NULL
+				ORDER BY nspname, relname";
+
+        }
+
+        /* tmp var to parse the results */
+        $_autovacs = $this->connection->selectSet($sql);
+
+        /* result array to return as RS */
+        $autovacs = array();
+        while (!$_autovacs->EOF) {
+            $_ = array(
+                'nspname' => $_autovacs->fields['nspname'],
+                'relname' => $_autovacs->fields['relname']
+            );
+
+            $relOptions = explode(',', $_autovacs->fields['reloptions']);
+            foreach ($relOptions as $var) {
+                list($o, $v) = explode('=', $var);
+                $_[$o] = $v;
+            }
+
+            $autovacs[] = $_;
+
+            $_autovacs->moveNext();
+        }
+
+        return new ArrayRecordSet($autovacs);
+    }
 }

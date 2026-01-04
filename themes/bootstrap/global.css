@@ -38,17 +38,13 @@ hr {
 
 h2 {
 	color: #195998;
-	font-size: 1.7em;
+	font-size: 1.3em;
 	font-weight: bold;
-	/*border: 2px solid #f1f1f1;*/
-	/*background-color: #FDFDFD;*/
-	padding: 2px 1em;
-	margin: 0 0 1ex 0;
 }
 
 h3 {
 	color: #195998;
-	font-size: small;
+	font-size: 1.1em;
 
 	font-weight: bold;
 }
@@ -732,4 +728,15 @@ table.sql-function {
 
 table.sql-function.properties {
 	/*margin: 0 auto;*/
+}
+
+.autovac.default {
+	color: inherit;
+	font-weight: normal;
+	font-style: italic;
+}
+
+.autovac.custom {
+	color: #d14;
+	font-weight: bold;
 }

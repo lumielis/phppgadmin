@@ -167,6 +167,9 @@ class ConcatDecorator extends Decorator
 
 class CallbackDecorator extends Decorator
 {
+	private $fn;
+	private $p;
+
 	function __construct($callback, $param = null)
 	{
 		$this->fn = $callback;

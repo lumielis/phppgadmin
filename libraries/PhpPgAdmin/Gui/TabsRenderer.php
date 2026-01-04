@@ -312,6 +312,7 @@ class TabsRenderer extends AbstractContext
                         'help' => 'pg.opclass',
                         'icon' => 'OperatorClasses',
                     ],
+                    /*
                     'conversions' => [
                         'title' => $lang['strconversions'],
                         'url' => 'conversions.php',
@@ -320,6 +321,7 @@ class TabsRenderer extends AbstractContext
                         'help' => 'pg.conversion',
                         'icon' => 'Conversions',
                     ],
+                    */
                     'privileges' => [
                         'title' => $lang['strprivileges'],
                         'url' => 'privileges.php',

@@ -158,6 +158,13 @@ class Postgres extends AbstractConnection
 		$this->clean($comment);
 
 		switch ($obj_type) {
+			case 'CAST':
+				// $obj_name = source type, $table = target type
+				$sql .= "({$obj_name} AS {$table}) IS ";
+				break;
+			case 'DOMAIN':
+				$sql .= "\"{$f_schema}\".\"{$obj_name}\" IS ";
+				break;
 			case 'TABLE':
 				$sql .= "\"{$f_schema}\".\"{$table}\" IS ";
 				break;

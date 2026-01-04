@@ -601,7 +601,11 @@ legend {
 	white-space: nowrap;
 }
 
-/* Base styling for code blocks */
+.autovac.default {
+	color: #f33;
+	font-weight: bold;
+}
+
 pre code.hljs {
 	display: block;
 	background: transparent !important;

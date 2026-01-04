@@ -27,7 +27,8 @@ function doSaveAlter()
 		$_POST['domain'],
 		$_POST['domdefault'],
 		isset($_POST['domnotnull']),
-		$_POST['domowner']
+		$_POST['domowner'],
+		$_POST['domcomment'] ?? ''
 	);
 	if ($status == 0)
 		doProperties($lang['strdomainaltered']);
@@ -63,6 +64,7 @@ function doAlter($msg = '')
 			if ($domaindata->fields['domnotnull'])
 				$_POST['domnotnull'] = 'on';
 			$_POST['domowner'] = $domaindata->fields['domowner'];
+			$_POST['domcomment'] = $domaindata->fields['domcomment'];
 		}
 
 		// Display domain info
@@ -77,6 +79,9 @@ function doAlter($msg = '')
 		echo "<tr><th class=\"data left\">{$lang['strdefault']}</th>\n";
 		echo "<td class=\"data1\"><input name=\"domdefault\" size=\"32\" value=\"",
 			html_esc($_POST['domdefault']), "\" /></td></tr>\n";
+		echo "<tr><th class=\"data left\">{$lang['strcomment']}</th>\n";
+		echo "<td class=\"data1\"><input name=\"domcomment\" size=\"32\" value=\"",
+			html_esc($_POST['domcomment']), "\" /></td></tr>\n";
 		echo "<tr><th class=\"data left required\">{$lang['strowner']}</th>\n";
 		echo "<td class=\"data1\"><select name=\"domowner\">";
 		while (!$users->EOF) {
@@ -381,6 +386,8 @@ function doCreate($msg = '')
 		$_POST['domdefault'] = '';
 	if (!isset($_POST['domcheck']))
 		$_POST['domcheck'] = '';
+	if (!isset($_POST['domcomment']))
+		$_POST['domcomment'] = '';
 
 	$types = $typeActions->getTypes(true);
 
@@ -423,6 +430,9 @@ function doCreate($msg = '')
 	echo "<tr><th class=\"data left\">{$lang['strconstraints']}</th>\n";
 	echo "<td class=\"data1\">CHECK (<input name=\"domcheck\" size=\"32\" value=\"",
 		html_esc($_POST['domcheck']), "\" />)</td></tr>\n";
+	echo "<tr><th class=\"data left\">{$lang['strcomment']}</th>\n";
+	echo "<td class=\"data1\"><input name=\"domcomment\" size=\"32\" value=\"",
+		html_esc($_POST['domcomment']), "\" /></td></tr>\n";
 	echo "</table>\n";
 	echo "<p><input type=\"hidden\" name=\"action\" value=\"save_create\" />\n";
 	echo $misc->form;
@@ -443,6 +453,9 @@ function doSaveCreate()
 	if (!isset($_POST['domcheck']))
 		$_POST['domcheck'] = '';
 
+	if (!isset($_POST['domcomment']))
+		$_POST['domcomment'] = '';
+
 	// Check that they've given a name and a definition
 	if ($_POST['domname'] == '')
 		doCreate($lang['strdomainneedsname']);
@@ -454,7 +467,8 @@ function doSaveCreate()
 			$_POST['domarray'] != '',
 			isset($_POST['domnotnull']),
 			$_POST['domdefault'],
-			$_POST['domcheck']
+			$_POST['domcheck'],
+			$_POST['domcomment'] ?? ''
 		);
 		if ($status == 0)
 			doDefault($lang['strdomaincreated']);

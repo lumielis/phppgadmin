@@ -94,7 +94,7 @@ class DomainActions extends AbstractActions
     /**
      * Creates a domain.
      */
-    public function createDomain($domain, $type, $length, $array, $notnull, $default, $check)
+    public function createDomain($domain, $type, $length, $array, $notnull, $default, $check, $comment = '')
     {
         $f_schema = $this->connection->_schema;
         $this->connection->fieldClean($f_schema);
@@ -135,13 +135,32 @@ class DomainActions extends AbstractActions
             $sql .= " CHECK ({$check})";
         }
 
-        return $this->connection->execute($sql);
+        $status = $this->connection->beginTransaction();
+        if ($status != 0) {
+            return -1;
+        }
+
+        $status = $this->connection->execute($sql);
+        if ($status != 0) {
+            $this->connection->rollbackTransaction();
+            return -1;
+        }
+
+        if ($comment != '') {
+            $status = $this->connection->setComment('DOMAIN', $domain, '', $comment, true);
+            if ($status != 0) {
+                $this->connection->rollbackTransaction();
+                return -1;
+            }
+        }
+
+        return $this->connection->endTransaction();
     }
 
     /**
      * Alters a domain.
      */
-    public function alterDomain($domain, $domdefault, $domnotnull, $domowner)
+    public function alterDomain($domain, $domdefault, $domnotnull, $domowner, $comment = '')
     {
         $f_schema = $this->connection->_schema;
         $this->connection->fieldClean($f_schema);
@@ -184,6 +203,14 @@ class DomainActions extends AbstractActions
         if ($status != 0) {
             $this->connection->rollbackTransaction();
             return -4;
+        }
+
+        if ($comment !== null) {
+            $status = $this->connection->setComment('DOMAIN', $domain, '', $comment);
+            if ($status != 0) {
+                $this->connection->rollbackTransaction();
+                return -5;
+            }
         }
 
         return $this->connection->endTransaction();

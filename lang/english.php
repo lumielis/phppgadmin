@@ -920,7 +920,7 @@ $lang['strsetvacuumtablesaved'] = 'Autovacuum setup for table %s saved.';
 $lang['strsetvacuumtablefail'] = 'Autovacuum setup for table %s failed.';
 $lang['strspecifydelvacuumtable'] = 'You must specify the table you want remove the autovacuum parameters from.';
 $lang['strspecifyeditvacuumtable'] = 'You must specify the table you want to edit the autovacuum parameters from.';
-$lang['strnotdefaultinred'] = 'Not default values are in red.';
+$lang['strnotdefaultinred'] = 'Note: default values are in red.';
 
 // Table-level Locks
 $lang['strlocks'] = 'Locks';

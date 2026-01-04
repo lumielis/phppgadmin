@@ -192,9 +192,7 @@ class CastActions extends AbstractActions
         }
 
         if ($comment !== '') {
-            $this->connection->clean($comment);
-            $commentSql = "COMMENT ON CAST ({$sourceType} AS {$targetType}) IS '{$comment}'";
-            $status = $this->connection->execute($commentSql);
+            $status = $this->connection->setComment('CAST', $sourceType, $targetType, $comment);
             if ($status != 0) {
                 $this->connection->rollbackTransaction();
                 return -7;
