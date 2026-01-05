@@ -280,14 +280,6 @@ class TabsRenderer extends AbstractContext
                         'help' => 'pg.domain',
                         'icon' => 'Domains',
                     ],
-                    'aggregates' => [
-                        'title' => $lang['straggregates'],
-                        'url' => 'aggregates.php',
-                        'urlvars' => ['subject' => 'schema'],
-                        'hide' => $hideAdvanced,
-                        'help' => 'pg.aggregate',
-                        'icon' => 'Aggregates',
-                    ],
                     'types' => [
                         'title' => $lang['strtypes'],
                         'url' => 'types.php',
@@ -295,6 +287,14 @@ class TabsRenderer extends AbstractContext
                         'hide' => $hideAdvanced,
                         'help' => 'pg.type',
                         'icon' => 'Types',
+                    ],
+                    'aggregates' => [
+                        'title' => $lang['straggregates'],
+                        'url' => 'aggregates.php',
+                        'urlvars' => ['subject' => 'schema'],
+                        'hide' => $hideAdvanced,
+                        'help' => 'pg.aggregate',
+                        'icon' => 'Aggregates',
                     ],
                     'operators' => [
                         'title' => $lang['stroperators'],

@@ -12,8 +12,6 @@ use PhpPgAdmin\Core\AppContainer;
 
 include_once('./libraries/bootstrap.php');
 
-$action = $_REQUEST['action'] ?? '';
-
 /**
  * Fetch a URL (or array of URLs) for a given help page.
  */
@@ -25,7 +23,7 @@ function getHelp($help)
 	$help_base = sprintf($conf['help_base'], (string) $pg->major_version);
 
 	// Get help pages
-	$pages = include __DIR__ . '/help/PostgresDocBase.php';
+	$pages = include __DIR__ . '/help-pages.inc.php';
 
 	if (isset($pages[$help])) {
 		if (is_array($pages[$help])) {
@@ -42,8 +40,7 @@ function getHelp($help)
 
 function doDefault()
 {
-	/** @var Postgres $data */
-	global $data, $lang;
+	$lang = AppContainer::getLang();
 
 	if (isset($_REQUEST['help'])) {
 		$url = getHelp($_REQUEST['help']);
@@ -64,7 +61,8 @@ function doDefault()
 
 function doBrowse($msg = '')
 {
-	global $misc, $data, $lang;
+	$misc = AppContainer::getMisc();
+	$lang = AppContainer::getLang();
 
 	$misc->printHeader($lang['strhelppagebrowser']);
 	$misc->printBody();
@@ -75,7 +73,7 @@ function doBrowse($msg = '')
 
 	echo "<dl>\n";
 
-	$pages = include __DIR__ . '/help/PostgresDocBase.php';
+	$pages = include __DIR__ . '/help-pages.inc.php';
 	foreach ($pages as $page => $dummy) {
 		echo "<dt>{$page}</dt>\n";
 
@@ -94,7 +92,8 @@ function doBrowse($msg = '')
 
 function doChoosePage($urls)
 {
-	global $misc, $lang;
+	$misc = AppContainer::getMisc();
+	$lang = AppContainer::getLang();
 
 	$misc->printHeader($lang['strhelppagebrowser']);
 	$misc->printBody();
@@ -109,6 +108,10 @@ function doChoosePage($urls)
 
 	$misc->printFooter();
 }
+
+// Main program
+
+$action = $_REQUEST['action'] ?? '';
 
 switch ($action) {
 	case 'browse':
