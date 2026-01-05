@@ -675,6 +675,8 @@ function doDefault($msg = '')
 			'field' => field('relname'),
 			'url' => "redirect.php?subject=view&amp;{$misc->href}&amp;",
 			'vars' => ['view' => 'relname'],
+			'icon' => $misc->icon('View'),
+			'class' => 'nowrap',
 		],
 		'owner' => [
 			'title' => $lang['strowner'],

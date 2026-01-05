@@ -38,6 +38,8 @@ function doDefault($msg = '')
 			'field' => field('seqname'),
 			'url' => "sequences.php?action=properties&amp;{$misc->href}&amp;",
 			'vars' => ['sequence' => 'seqname'],
+			'icon' => $misc->icon('Sequence'),
+			'class' => 'nowrap',
 		],
 		'owner' => [
 			'title' => $lang['strowner'],
@@ -115,6 +117,7 @@ function doDefault($msg = '')
 					]
 				]
 			],
+			'icon' => $misc->icon('CreateSequence'),
 			'content' => $lang['strcreatesequence']
 		]
 	], 'sequences-sequences', get_defined_vars());

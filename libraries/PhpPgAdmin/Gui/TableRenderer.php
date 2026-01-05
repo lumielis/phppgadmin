@@ -89,20 +89,12 @@ class TableRenderer extends AbstractContext
 
                 $class = $column['class'] ?? '';
 
-                switch ($column_id) {
-                    case 'actions':
-                        if (sizeof($actions) > 0)
-                            echo "<th class=\"data\" colspan=\"", count($actions), "\">{$column['title']}</th>\n";
-                        break;
-                    default:
-                        echo "<th class=\"data {$class}\">";
-                        if (isset($column['help']))
-                            $this->misc()->printHelp($column['title'], $column['help']);
-                        else
-                            echo $column['title'];
-                        echo "</th>\n";
-                        break;
-                }
+                echo "<th class=\"data {$class}\">";
+                if (isset($column['help']))
+                    $this->misc()->printHelp($column['title'], $column['help']);
+                else
+                    echo $column['title'];
+                echo "</th>\n";
             }
             echo "</tr>\n";
 
@@ -137,16 +129,17 @@ class TableRenderer extends AbstractContext
 
                     switch ($column_id) {
                         case 'actions':
+                            echo "<td class=\"action-buttons {$class}\">";
                             foreach ($alt_actions as $action) {
-                                if (isset($action['disable']) && $action['disable'] === true) {
-                                    echo "<td></td>\n";
-                                } else {
-                                    echo "<td class=\"opbutton{$id} {$class}\">";
-                                    $action['fields'] = $tabledata->fields;
-                                    $this->misc()->printLink($action);
-                                    echo "</td>\n";
+                                if ($action['disable'] ?? false) {
+                                    continue;
                                 }
+                                echo "<span class=\"opbutton{$id} op-button\">";
+                                $action['fields'] = $tabledata->fields;
+                                $this->misc()->printLink($action);
+                                echo "</span> ";
                             }
+                            echo "</td>\n";
                             break;
                         case 'comment':
                             echo "<td class='comment_cell'>";

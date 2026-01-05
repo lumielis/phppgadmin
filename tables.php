@@ -844,6 +844,8 @@ function doDefault($msg = '')
 			'field' => field('relname'),
 			'url' => "redirect.php?subject=table&amp;{$misc->href}&amp;",
 			'vars' => ['table' => 'relname'],
+			'icon' => $misc->icon('Table'),
+			'class' => 'nowrap',
 		],
 		'owner' => [
 			'title' => $lang['strowner'],

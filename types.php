@@ -816,6 +816,8 @@ function doDefault($msg = '')
 			'field' => field('typname'),
 			'url' => "types.php?action=properties&amp;{$misc->href}&amp;",
 			'vars' => ['type' => 'basename'],
+			'icon' => $misc->icon('Type'),
+			'class' => 'nowrap'
 		],
 		'owner' => [
 			'title' => $lang['strowner'],

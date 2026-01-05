@@ -136,7 +136,7 @@ tr.data3:hover {
 .data3 {
 	background-color: #f3f3e9;
 }
-td.opbutton1 {
+.opbutton1 {
 	color: #000000;
 	border-top: 1px solid #ffffff;
 	border-right: 1px solid #706d41;
@@ -149,7 +149,7 @@ td.opbutton1 {
 	padding-right: 6px;
 	text-align: center;
 }
-td.opbutton2 {
+.opbutton2 {
 	color: #000000;
 	border-top: 1px solid #ffffff;
 	border-right: 1px solid #706d41;

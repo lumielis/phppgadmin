@@ -518,7 +518,8 @@ table.sql-function {
 	width: 90%;
 }
 
-.no-wrap {
+.no-wrap,
+.nowrap {
 	white-space: nowrap;
 }
 
