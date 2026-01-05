@@ -188,13 +188,51 @@ var webFXTreeHandler = {
 	idSeparator: "-",
 
 	// Generate a unique ID based on semantic ID or fallback to counter for stability
-	getUniqueId: function (oNode) {
-		// If a semantic ID is provided via data, use it - this is the preferred approach
-		if (oNode && oNode.semanticId) {
-			return this.idPrefix + this._sanitizeForId(oNode.semanticId);
+	// Hash helper: deterministic, returns compact base36 string
+	_hashString: function (s) {
+		var h = 5381;
+		for (var i = 0; i < s.length; i++) {
+			h = (h * 33) ^ s.charCodeAt(i);
 		}
+		// >>> 0 to force uint32, then base36 and limit length
+		return (h >>> 0).toString(36).substring(0, 8);
+	},
 
-		// Fallback to counter-based ID if semantic ID not available
+	// Generate a unique ID based on full-text ancestor path (plus semanticid hints),
+	// falling back to counter when parent is unknown.
+	getUniqueId: function (oNode) {
+		try {
+			// If we don't know the parent yet, avoid collisions by using a counter.
+			// A stable path-based id will be assigned once the node is attached.
+			if (!oNode || !oNode.parentNode) {
+				return this.idPrefix + this.idCounter++;
+			}
+
+			var parts = [];
+			var n = oNode;
+			// Walk up ancestors collecting readable text to build full path
+			while (n) {
+				var txt = "";
+				if (typeof n.getText === "function") {
+					try {
+						txt = n.getText();
+					} catch (e) {
+						// ignore
+					}
+				}
+				if (!txt && n.text) txt = webFXTreeHandler.htmlToText(n.text);
+				// Include semanticId as a hint but never as the raw id (it can collide)
+				var sid = n.semanticId ? "sid:" + n.semanticId : "";
+				parts.unshift((sid ? sid + "|" : "") + (txt || ""));
+				n = n.parentNode;
+			}
+			var seed = parts.join("|");
+			if (seed) {
+				return this.idPrefix + this._hashString(seed);
+			}
+		} catch (e) {}
+
+		// Fallback to counter-based ID if nothing else available
 		return this.idPrefix + this.idCounter++;
 	},
 
@@ -210,7 +248,7 @@ var webFXTreeHandler = {
 
 	all: {},
 	getNodeById: function (sId) {
-		return all[sId];
+		return this.all[sId];
 	},
 	addNode: function (oNode) {
 		this.all[oNode.id] = oNode;
@@ -368,6 +406,24 @@ _p.add = function (oChild, oBefore) {
 	}
 
 	oChild.parentNode = this;
+	// Recompute id now that parent is known so ids are stable and path-based
+	try {
+		oChild.setId(webFXTreeHandler.getUniqueId(oChild));
+	} catch (e) {}
+	// Re-evaluate persistence after id is finalized.
+	// Important: use setExpanded() (not just `open = true`) so lazy-load nodes
+	// actually trigger WebFXLoadTree.loadXmlDocument when restored as expanded.
+	if (webFXTreeConfig.usePersistence) {
+		try {
+			var shouldOpen =
+				webFXTreeHandler.persistenceManager.getExpanded(oChild);
+			if (shouldOpen) {
+				oChild.setExpanded(true);
+			} else {
+				oChild.open = false;
+			}
+		} catch (e) {}
+	}
 	var t = this.getTree();
 	if (t) {
 		oChild.tree = t;
@@ -1397,7 +1453,15 @@ _p.getPreviousShownNode = function () {
 // WebFXTree
 ///////////////////////////////////////////////////////////////////////////////
 
-function WebFXTree(sText, oAction, sBehavior, sIcon, oIconAction, sOpenIcon, sSemanticId) {
+function WebFXTree(
+	sText,
+	oAction,
+	sBehavior,
+	sIcon,
+	oIconAction,
+	sOpenIcon,
+	sSemanticId
+) {
 	WebFXTreeAbstractNode.call(this, sText, oAction, oIconAction, sSemanticId);
 	if (sIcon) this.icon = sIcon;
 	if (sOpenIcon) this.openIcon = sOpenIcon;
@@ -1623,7 +1687,15 @@ _p.getSuspendRedraw = function () {
 // WebFXTreeItem
 ///////////////////////////////////////////////////////////////////////////////
 
-function WebFXTreeItem(sText, oAction, eParent, sIcon, oIconAction, sOpenIcon, sSemanticId) {
+function WebFXTreeItem(
+	sText,
+	oAction,
+	eParent,
+	sIcon,
+	oIconAction,
+	sOpenIcon,
+	sSemanticId
+) {
 	WebFXTreeAbstractNode.call(this, sText, oAction, oIconAction, sSemanticId);
 	if (sIcon) this.icon = sIcon;
 	if (sOpenIcon) this.openIcon = sOpenIcon;

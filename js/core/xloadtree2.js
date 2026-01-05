@@ -355,7 +355,7 @@ WebFXLoadTree.createItemFromElement = function (oNode) {
 		jsAttrs.icon,
 		jsAttrs.iconaction,
 		jsAttrs.openicon,
-		jsAttrs.semanticid  // Pass semantic ID as constructor parameter
+		jsAttrs.semanticid // Pass semantic ID as constructor parameter
 	);
 	if (jsAttrs.text) {
 		jsNode.setText(jsAttrs.text);
@@ -365,13 +365,9 @@ WebFXLoadTree.createItemFromElement = function (oNode) {
 		jsNode.target = jsAttrs.target;
 	}
 	// After construction, if we have a semantic ID, regenerate the node ID to ensure it's properly registered
-	if (jsAttrs.semanticid) {
-		var semanticBasedId = webFXTreeHandler.idPrefix + webFXTreeHandler._sanitizeForId(jsAttrs.semanticid);
-		jsNode.setId(semanticBasedId);
-	}
-	if (jsAttrs.id) {
-		jsNode.setId(jsAttrs.id);
-	}
+	// NOTE: Do not override jsNode.id from XML attributes.
+	// IDs are generated client-side from the full ancestor path to guarantee uniqueness.
+	// We keep semanticid/id in jsNode.attributes for compatibility if needed.
 	if (jsAttrs.tooltip) {
 		jsNode.toolTip = jsAttrs.tooltip;
 	}
@@ -405,6 +401,7 @@ WebFXLoadTree.loadXmlDocument = function (jsNode) {
 	}
 	jsNode.loading = true;
 	var id = jsNode.getId();
+	var nodeRef = jsNode; // capture direct reference for async callbacks
 
 	// Use modern fetch() API instead of XMLHttpRequest
 	// This avoids the complex queue management and concurrent request issues
@@ -421,8 +418,8 @@ WebFXLoadTree.loadXmlDocument = function (jsNode) {
 			return response.text();
 		})
 		.then(function (xmlText) {
-			var jsNode = webFXTreeHandler.all[id];
-			if (!jsNode) return;
+			var n = nodeRef;
+			if (!n) return;
 
 			// Parse XML from response text
 			var parser = new DOMParser();
@@ -434,41 +431,41 @@ WebFXLoadTree.loadXmlDocument = function (jsNode) {
 			}
 
 			// Simulate the old _xmlHttp object for compatibility
-			jsNode._xmlHttp = {
+			n._xmlHttp = {
 				responseXML: doc,
 				readyState: 4,
 			};
 
-			WebFXLoadTree.documentLoaded(jsNode);
+			WebFXLoadTree.documentLoaded(n);
 		})
 		.catch(function (error) {
-			var jsNode = webFXTreeHandler.all[id];
-			if (!jsNode) return;
+			var n = nodeRef;
+			if (!n) return;
 
-			jsNode.loading = false;
-			jsNode.loaded = true;
-			jsNode.errorText =
+			n.loading = false;
+			n.loaded = true;
+			n.errorText =
 				webFXTreeConfig.errorLoadingText +
 				" " +
-				jsNode.src +
+				n.src +
 				" (" +
 				error.message +
 				")";
 
-			var t = jsNode.getTree();
+			var t = n.getTree();
 			var oldSuspend = t.getSuspendRedraw();
 			t.setSuspendRedraw(true);
 
-			jsNode._loadingItem.icon = webFXTreeConfig.errorIcon;
-			jsNode._loadingItem.text = jsNode.errorText;
-			jsNode._loadingItem.action = WebFXLoadTree._reloadParent;
-			jsNode._loadingItem.toolTip = webFXTreeConfig.reloadText;
+			n._loadingItem.icon = webFXTreeConfig.errorIcon;
+			n._loadingItem.text = n.errorText;
+			n._loadingItem.action = WebFXLoadTree._reloadParent;
+			n._loadingItem.toolTip = webFXTreeConfig.reloadText;
 
 			t.setSuspendRedraw(oldSuspend);
-			jsNode._loadingItem.update();
+			n._loadingItem.update();
 
-			if (typeof jsNode.onerror == "function") {
-				jsNode.onerror();
+			if (typeof n.onerror == "function") {
+				n.onerror();
 			}
 		});
 };
