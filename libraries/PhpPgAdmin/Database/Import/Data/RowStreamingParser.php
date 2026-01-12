@@ -1,6 +1,6 @@
 <?php
 
-namespace PhpPgAdmin\Database\Import;
+namespace PhpPgAdmin\Database\Import\Data;
 
 interface RowStreamingParser
 {

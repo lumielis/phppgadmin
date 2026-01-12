@@ -118,7 +118,6 @@ class ImportFormRenderer extends AbstractContext
         $conf = $this->conf();
         $lang = $this->lang();
         $misc = $this->misc();
-        $useHeader = !empty($options['use_header']);
         $importCfg = $conf['import'] ?? [];
         $maxSize = (int) ($importCfg['upload_max_size'] ?? 0);
         $chunkSize = (int) ($importCfg['upload_chunk_size'] ?? 2 * 1024 * 1024);
@@ -157,6 +156,10 @@ class ImportFormRenderer extends AbstractContext
                     <label class="ml-3">
                         <input type="radio" name="format" value="xml" />
                         XML
+                    </label>
+                    <label class="ml-3">
+                        <input type="radio" name="format" value="json" />
+                        JSON
                     </label>
                 </div>
             </fieldset>

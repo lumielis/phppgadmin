@@ -1,7 +1,7 @@
 <?php
 
 use PhpPgAdmin\Core\AppContainer;
-use PhpPgAdmin\Database\Import\DataImportExecutor;
+use PhpPgAdmin\Database\Import\Data\DataImportExecutor;
 use PhpPgAdmin\Database\Import\LogCollector;
 
 // Streaming data import endpoint for table-scoped CSV/TSV/XML imports
@@ -18,6 +18,8 @@ require_once __DIR__ . '/libraries/bootstrap.php';
 function handle_process_chunk(): void
 {
 	header('Content-Type: application/json');
+
+	ini_set('html_errors', '0');
 
 	try {
 		$misc = AppContainer::getMisc();
@@ -139,9 +141,12 @@ function handle_process_chunk(): void
 		}
 		$absoluteOffset = $baseOffset + $newBytesRead;
 
-		if ($eof && !empty($result['remainder'])) {
-			$result['errors']++;
-			$logCollector->addError('Unexpected end of file: trailing data not parsed. remainder_len=' . strlen($result['remainder']));
+		if ($eof) {
+			$remainder = trim($result['remainder']);
+			if ($remainder !== '') {
+				$result['errors']++;
+				$logCollector->addError('Unexpected end of file: trailing data not parsed. remainder_len=' . strlen($remainder) . ' bytes');
+			}
 		}
 
 		echo json_encode([
@@ -149,7 +154,7 @@ function handle_process_chunk(): void
 			'remainder_len' => strlen($result['remainder']),
 			'remainder' => $result['remainder'],
 			'errors' => $result['errors'],
-			'logEntries' => $logCollector->getLogsWithSummary(),
+			'logEntries' => $logCollector->getLogs(),
 		]);
 	} catch (\Throwable $t) {
 		http_response_code(500);

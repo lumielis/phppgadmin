@@ -11,7 +11,7 @@ class CsvFormatter extends OutputFormatter
     /** @var string */
     protected $mimeType = 'text/csv; charset=utf-8';
     /** @var string */
-    protected $fileExtension = 'csv';
+    protected $fileExtension;
     /** @var bool */
     protected $supportsGzip = true;
 
@@ -19,6 +19,18 @@ class CsvFormatter extends OutputFormatter
     private $pg;
 
     private $exportNulls;
+
+    /** @var string */
+    private $delimiter;
+    /** @var string */
+    private $lineEnding;
+
+    public function __construct($delimiter = ',', $lineEnding = "\r\n", $fileExtension = 'csv')
+    {
+        $this->delimiter = $delimiter;
+        $this->lineEnding = $lineEnding;
+        $this->fileExtension = $fileExtension;
+    }
 
     /**
      * Format ADORecordSet as CSV
@@ -72,10 +84,10 @@ class CsvFormatter extends OutputFormatter
         foreach ($fields as $field) {
             $out .= $sep;
             $out .= $this->csvField($field);
-            $sep = ',';
+            $sep = $this->delimiter;
         }
 
-        return $out . "\r\n";
+        return $out . $this->lineEnding;
     }
 
     /**
@@ -104,10 +116,10 @@ class CsvFormatter extends OutputFormatter
             }
 
             $out .= $value;
-            $sep = ',';
+            $sep = $this->delimiter;
         }
 
-        return $out . "\r\n";
+        return $out . $this->lineEnding;
     }
 
     /**
@@ -117,8 +129,7 @@ class CsvFormatter extends OutputFormatter
     {
         $value = (string) $value;
 
-        // One scan instead of 3× strpos()
-        if (strpbrk($value, ",\"\n") !== false) {
+        if (strpbrk($value, $this->delimiter . "\"\n") !== false) {
             return '"' . str_replace('"', '""', $value) . '"';
         }
 

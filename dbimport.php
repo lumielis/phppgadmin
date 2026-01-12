@@ -38,6 +38,8 @@ function handle_process_chunk_stream(): void
 {
     header('Content-Type: application/json');
 
+    ini_set('html_errors', '0');
+
     try {
         $misc = AppContainer::getMisc();
         $pg = AppContainer::getPostgres();

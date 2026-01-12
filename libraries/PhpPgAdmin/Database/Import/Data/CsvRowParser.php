@@ -1,6 +1,6 @@
 <?php
 
-namespace PhpPgAdmin\Database\Import;
+namespace PhpPgAdmin\Database\Import\Data;
 
 /**
  * Streaming CSV/TSV parser that tolerates split rows across chunks.

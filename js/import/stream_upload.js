@@ -181,7 +181,7 @@ async function startStreamUpload() {
 	}
 
 	// Backpressure thresholds
-	const highWaterMark = chunkSize * 10;
+	const highWaterMark = chunkSize * 1;
 
 	// send single payload to server (prepends remainder and handles compression/hash)
 	// Includes automatic retry with exponential backoff

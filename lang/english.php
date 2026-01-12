@@ -138,6 +138,7 @@ $lang['strfile'] = 'File';
 $lang['strfileimported'] = 'File imported.';
 $lang['struploadfile'] = 'Upload file';
 $lang['strupload'] = 'Upload';
+$lang['strnewwindow'] = 'Open New Window';
 
 # Import form labels
 $lang['strimportroles'] = 'Import roles';
@@ -180,9 +181,8 @@ $lang['strstop'] = 'Stop';
 $lang['strgotoppage'] = 'back to top';
 $lang['strtheme'] = 'Theme';
 $lang['strcluster'] = 'Cluster';
-$lang['strnewwindow'] = 'Open New Window';
 $lang['strimportcompresschunks'] = 'Compress chunks with gzip (saves bandwidth)';
-$lang['strimportintro'] = 'The import function reads and unpacks a file in the browser chunk by chunk and uploads the parts, where they are processed immediately. With this logic, it should be possible to run long imports and import large files.';
+$lang['strimportintro'] = 'The import function reads and unpacks a file in the browser chunk by chunk and uploads the parts, where they are processed immediately. With this logic, it should be possible to run long imports with large files.';
 
 // Admin
 $lang['stradminondatabase'] = 'The following administrative tasks apply on the whole "%s" database.';

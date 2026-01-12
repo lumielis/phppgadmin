@@ -30,7 +30,7 @@ class JsonFormatter extends OutputFormatter
     public function format($recordset, $metadata = [])
     {
         if (!$recordset || $recordset->EOF) {
-            $this->write("{\"metadata\":{},\"data\":[]}\n");
+            $this->write("{\"header\":[],\"data\":[]}\n");
             return;
         }
 
@@ -103,13 +103,13 @@ class JsonFormatter extends OutputFormatter
 
         // --- 2) Write JSON header ---
         $this->write("{\n");
-        $this->write("\t\"columns\": [\n");
+        $this->write("\t\"header\": [\n");
 
         $sep = "";
         for ($i = 0; $i < $colCount; $i++) {
             $this->write($sep . "\t\t" . json_encode([
                 'name' => $columns[$i],
-                'type' => $types[$i]
+                'type' => self::DATA_TYPE_MAPPING[$types[$i]] ?? $types[$i]
             ], JSON_UNESCAPED_UNICODE));
             $sep = ",\n";
         }

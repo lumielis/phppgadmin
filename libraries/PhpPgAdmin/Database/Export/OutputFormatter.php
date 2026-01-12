@@ -34,6 +34,35 @@ abstract class OutputFormatter extends AbstractContext
      */
     protected $outputStream = null;
 
+    protected const DATA_TYPE_MAPPING = [
+
+        'int2' => 'smallint',
+        'int4' => 'integer',
+        'int8' => 'bigint',
+        'float4' => 'real',
+        'float8' => 'double precision',
+
+        'varchar' => 'character varying',
+        'bpchar' => 'character', // blank-padded char
+        'citext' => 'citext',
+
+        'bool' => 'boolean',
+
+        'time' => 'time without time zone',
+        'timetz' => 'time with time zone',
+        'timestamp' => 'timestamp without time zone',
+        'timestamptz' => 'timestamp with time zone',
+
+        '_int4' => 'integer[]',
+        '_text' => 'text[]',
+        '_varchar' => 'character varying[]',
+        '_bool' => 'boolean[]',
+        '_float8' => 'double precision[]',
+        '_numeric' => 'numeric[]',
+
+    ];
+
+
     /**
      * Get the MIME type for this format
      * @return string

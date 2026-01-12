@@ -1,9 +1,11 @@
 <?php
 
-namespace PhpPgAdmin\Database\Import;
+namespace PhpPgAdmin\Database\Import\Data;
 
 use RuntimeException;
 use PhpPgAdmin\Database\Postgres;
+use PhpPgAdmin\Database\Import\LogCollector;
+use PhpPgAdmin\Database\Import\CopyStreamHandler;
 use PhpPgAdmin\Database\Import\Exception\CopyException;
 
 class DataImportExecutor
@@ -41,6 +43,7 @@ class DataImportExecutor
         $parseState = $state['parser'] ?? [];
         $result = $parser->parse($decoded, $parseState);
         $state['parser'] = $parseState;
+        //print_r($result);
 
         $rows = $result['rows'];
         $remainder = $result['remainder'];
@@ -115,10 +118,12 @@ class DataImportExecutor
     private function makeParser(string $format, bool $useHeader): RowStreamingParser
     {
         switch ($format) {
-            case 'tab':
-                return new CsvRowParser("\t", $useHeader);
+            case 'json':
+                return new JsonRowParser();
             case 'xml':
                 return new XmlRowParser();
+            case 'tab':
+                return new CsvRowParser("\t", $useHeader);
             case 'csv':
             default:
                 return new CsvRowParser(',', $useHeader);
