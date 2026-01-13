@@ -3,7 +3,6 @@
 namespace PhpPgAdmin\Gui;
 
 use PhpPgAdmin\Core\AppContainer;
-use PhpPgAdmin\Database\Actions\DatabaseActions;
 use PhpPgAdmin\Database\Export\Compression\CompressionFactory;
 
 /**

@@ -99,9 +99,9 @@ class RowActions extends AbstractActions
 		$page_size,
 		&$max_pages
 	) {
-		// Check that we're not going to divide by zero
-		if (!is_numeric($page_size) || $page_size != (int) $page_size || $page_size <= 0)
-			return -3;
+		$page_size = (int) $page_size;
+		if ($page_size <= 0)
+			$page_size = PHP_INT_MAX;
 
 		// If $type is TABLE, then generate the query
 		if (empty($query) && $type == "TABLE") {

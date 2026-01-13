@@ -112,8 +112,7 @@ EOT;
 		// make function searchable by key
 		$all_functions = array_combine($all_functions, $all_functions);
 
-		echo "<form action=\"display.php\" method=\"post\" id=\"ac_form\">\n";
-		//echo "<hidden name=\"\" value=\"\">\n";
+		echo "<form action=\"display.php\" method=\"post\" id=\"ac_form\" enctype=\"multipart/form-data\">\n";
 		$error = true;
 		if ($attrs->recordCount() > 0 && ($insert || $rs->recordCount() == 1)) {
 			echo "<table>\n";
@@ -703,7 +702,7 @@ function doBrowse($msg = '')
 		$type = 'QUERY';
 	}
 
-	// get or build sql query
+	// Get or build SQL query
 	if (!empty($_REQUEST['query'])) {
 		$query = $_REQUEST['query'];
 		$parse_table = true;
@@ -717,7 +716,7 @@ function doBrowse($msg = '')
 		}
 	}
 
-	// parse sql query
+	// Parse SQL query
 	$parser = new PHPSQLParser();
 	$parsed = $parser->parse($query);
 
@@ -883,12 +882,8 @@ function doBrowse($msg = '')
 	);
 
 	$pg->conn->setFetchMode(ADODB_FETCH_ASSOC);
-	/*
-	var_dump($data->lastQueryTime);
-	var_dump($data->lastQueryOffset);
-	var_dump($data->lastQueryLimit);
-	var_dump($data->totalRowsFound);
-	*/
+
+	// Generate status line
 	$status_line = format_string($lang['strbrowsestatistics'], [
 		'count' => is_object($rs) ? $rs->rowCount() : 0,
 		'first' => is_object($rs) && $rs->rowCount() > 0 ? $rowActions->lastQueryOffset + 1 : 0,
@@ -896,8 +891,8 @@ function doBrowse($msg = '')
 		'total' => $rowActions->totalRowsFound,
 		'duration' => round($pg->lastQueryTime, 5),
 	]);
-	//var_dump($status_line);
 
+	// Get foreign key information for the current table
 	$fkey_information = getFKInfo();
 
 	// Build strings for GETs in array
@@ -929,6 +924,7 @@ function doBrowse($msg = '')
 	$_gets['strings'] = $_REQUEST['strings'];
 	$_gets['max_rows'] = $_REQUEST['max_rows'];
 
+	// Save query to history if required
 	if ($save_history) {
 		$misc->saveSqlHistory($query, true);
 	}
@@ -1127,7 +1123,7 @@ function doBrowse($msg = '')
 		// Show page navigation
 		$misc->printPageNavigation($_REQUEST['page'], $max_pages, $_gets, 'display.php');
 	} else {
-		echo "<div class=\"empty-result\">{$lang['strnodata']}</div>\n";
+		echo "<p class=\"nodata\">{$lang['strnodata']}</p>\n";
 	}
 
 	// Navigation links
@@ -1316,7 +1312,7 @@ function beginHtml()
 	$scripts .= "errmsg: '" . str_replace("'", "\'", $lang['strconnectionfail']) . "'\n";
 	$scripts .= "};\n";
 	$scripts .= "</script>\n";
-	$scripts .= <<<EOT
+	$scripts .= <<<"EOT"
 <script type="text/javascript">
 	// Adjust form method based on whether the query is read-only and its length
 	// is small enough for a GET request.

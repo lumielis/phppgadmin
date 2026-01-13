@@ -289,6 +289,8 @@
 		const hidden = document.createElement("input");
 		hidden.type = "hidden";
 		hidden.name = element.name;
+		hidden.onchange = element.onchange;
+		hidden.dataset.hideFromUrl = true;
 
 		// copy data- attributes
 		for (const [key, value] of Object.entries(element.dataset)) {
@@ -313,6 +315,9 @@
 
 		editor.session.on("change", function () {
 			hidden.value = editor.getValue();
+			if (hidden.onchange) {
+				hidden.onchange();
+			}
 		});
 
 		editor.on("blur", () => {
@@ -355,16 +360,22 @@
 		}
 		element.dataset.hljsInitialized = "1";
 
-		const mode = element.dataset.mode || "pgsql";
-		element.classList.add("language-" + mode);
+		const language = element.dataset.language || "pgsql";
+		if (language === "plpgsql") language = "pgsql";
+		element.classList.add(`language-${language}`);
+		console.log("SQL Viewer language:", language);
+
+		// Apply syntax highlighting
 
 		hljs.highlightElement(element);
 
-		// Quoted identifiers
-		element.innerHTML = element.innerHTML.replace(
-			/"([\w.]+)"/g,
-			'<span class="hljs-quoted-identifier">"$1"</span>'
-		);
+		if (language === "pgsql") {
+			// Quoted identifiers
+			element.innerHTML = element.innerHTML.replace(
+				/"([\w.]+)"/g,
+				'<span class="hljs-quoted-identifier">"$1"</span>'
+			);
+		}
 	}
 
 	/**
@@ -377,9 +388,10 @@
 			createSqlEditor(element);
 		});
 
-		rootElement.querySelectorAll(".sql-viewer").forEach((element) => {
-			createSqlViewer(element);
-		});
+		const elements = Array.from(
+			rootElement.querySelectorAll(".sql-viewer")
+		);
+		processInIdle(elements, createSqlViewer);
 	}
 
 	/**
@@ -399,6 +411,50 @@
 				//console.log(element);
 				createDatePicker(element);
 			});
+	}
+
+	function highlightDataFields(rootElement) {
+		const rePgDateTime =
+			/^(?=(?:\d{4}-\d{2}-\d{2})|(?:\d{2}:\d{2}:\d{2}))(?:(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2}))?(?:\s*(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?:\.(?<ms>\d+))?(?<tz>[+-]\d{2})?)?$/;
+
+		const elements = Array.from(
+			rootElement.querySelectorAll(".field.highlight-datetime")
+		);
+		processInIdle(elements, (element) => {
+			const text = element.textContent.trim();
+			console.log("Checking datetime field:", text);
+
+			let m = text.match(rePgDateTime);
+			if (m) {
+				const groups = m.groups;
+				console.log("Matched datetime groups:", groups);
+				let html = "";
+				if (groups.year) {
+					html += '<span class="dt-date">';
+					html += `<span class="dt-year">${groups.year}</span>-`;
+					html += `<span class="dt-month">${groups.month}</span>-`;
+					html += `<span class="dt-day">${groups.day}</span>`;
+					html += "</span>";
+					if (groups.hour) {
+						html += " ";
+					}
+				}
+				if (groups.hour) {
+					html += '<span class="dt-time">';
+					html += `<span class="dt-hour">${groups.hour}</span>:`;
+					html += `<span class="dt-minute">${groups.minute}</span>:`;
+					html += `<span class="dt-second">${groups.second}</span>`;
+					if (groups.ms) {
+						html += `.<span class="dt-ms">${groups.ms}</span>`;
+					}
+					if (groups.tz) {
+						html += `<span class="dt-tz">${groups.tz}</span>`;
+					}
+					html += "</span>";
+				}
+				element.innerHTML = html;
+			}
+		});
 	}
 
 	// Tooltips
@@ -440,6 +496,7 @@
 		console.log("Frame loaded:", e.detail.url);
 		createSqlEditors(e.target);
 		createDateAndTimePickers(e.target);
+		highlightDataFields(e.target);
 	});
 
 	// Initialization
@@ -475,4 +532,27 @@
 
 		return newGrammar;
 	});
+
+	function processInIdle(chunks, fn) {
+		const scheduleIdleWork = (cb) => {
+			return setTimeout(() => {
+				const start = performance.now();
+				cb({
+					didTimeout: false,
+					timeRemaining: () =>
+						Math.max(0, 10 - (performance.now() - start)),
+				});
+			}, 0);
+		};
+
+		const run = (deadline) => {
+			while (deadline.timeRemaining() > 0 && chunks.length > 0) {
+				fn(chunks.shift());
+			}
+			if (chunks.length > 0) {
+				scheduleIdleWork(run);
+			}
+		};
+		scheduleIdleWork(run);
+	}
 })();

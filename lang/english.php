@@ -312,6 +312,7 @@ $lang['strorderbyhelp'] = "Click: Sort ASC/DESC\nShift+Click: Add field\nCtrl+Cl
 $lang['strselectmaxrows'] = "Rows:";
 $lang['strjumppage'] = "Page:";
 $lang['strquerysubmit'] = "Send Query";
+$lang['strall'] = 'All';
 
 // Columns
 $lang['strcolprop'] = 'Column properties';

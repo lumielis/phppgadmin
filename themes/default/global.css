@@ -47,21 +47,6 @@ table.error {
 table.error td {
 	background-color: #e6e6cc;
 }
-table.navbar {
-	background-color: #e6e6cc;
-}
-table.navbar td {
-	height: 25px;
-	color: #000000;
-	background-color: #f3f3e9;
-	text-align: center;
-	font-family: arial, tahoma, verdana, helvetica, sans-serif, serif;
-	font-size: smaller; /* 0.9em */
-	font-weight: bold;
-}
-table.navbar td.active {
-	background-color: #e6e6cc;
-}
 th.data {
 	color: #000000;
 	background-color: #e6e6cc;

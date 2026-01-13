@@ -59,11 +59,20 @@ class FormRenderer extends AbstractContext
 		$base_type = strstr($type, ' ', true) ?: substr($type, 0, 9);
 
 		// Determine actions string
-		if (!empty($extras['class'])) {
-			$extras['class'] = $extras['class'] . ' ' . htmlspecialchars($base_type);
-		} else {
-			$extras['class'] = htmlspecialchars($base_type);
+		$extras['class'] = empty($extras['class']) ? '' : $extras['class'] . ' ';
+		$extras['class'] .= htmlspecialchars($base_type);
+
+		if (
+			isset([
+				'json' => true,
+				'jsonb' => true,
+				'xml' => true,
+			][$base_type])
+		) {
+			$extras['class'] .= ' sql-editor frame resizable';
+			$extras['data-mode'] = str_replace('jsonb', 'json', $base_type);
 		}
+
 		$extra_str = '';
 		foreach ($extras as $k => $v) {
 			$extra_str .= " {$k}=\"" . htmlspecialchars($v ?? '') . "\"";

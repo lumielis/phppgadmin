@@ -265,14 +265,6 @@ class TabsRenderer extends AbstractContext
                         'help' => 'pg.function',
                         'icon' => 'Functions',
                     ],
-                    'fulltext' => [
-                        'title' => $lang['strfulltext'],
-                        'url' => 'fulltext.php',
-                        'urlvars' => ['subject' => 'schema'],
-                        'help' => 'pg.fts',
-                        'tree' => true,
-                        'icon' => 'Fts',
-                    ],
                     'domains' => [
                         'title' => $lang['strdomains'],
                         'url' => 'domains.php',
@@ -329,6 +321,14 @@ class TabsRenderer extends AbstractContext
                         'help' => 'pg.privilege',
                         'tree' => false,
                         'icon' => 'Privileges',
+                    ],
+                    'fulltext' => [
+                        'title' => $lang['strfulltext'],
+                        'url' => 'fulltext.php',
+                        'urlvars' => ['subject' => 'schema'],
+                        'help' => 'pg.fts',
+                        'tree' => true,
+                        'icon' => 'Fts',
                     ],
                     'export' => [
                         'title' => $lang['strexport'],

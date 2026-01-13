@@ -83,6 +83,8 @@ class LayoutRenderer extends AbstractContext
 			<script src="js/lib/lz-string/lz-string.js" defer type="text/javascript"></script>
 			<script src="js/lib/highlight/highlight.min.js" defer type="text/javascript"></script>
 			<script src="js/lib/highlight/languages/pgsql.min.js" defer type="text/javascript"></script>
+			<script src="js/lib/highlight/languages/json.min.js" defer type="text/javascript"></script>
+			<script src="js/lib/highlight/languages/xml.min.js" defer type="text/javascript"></script>
 			<script src="js/core/frameset.js" defer type="text/javascript"></script>
 			<script src="js/core/misc.js" defer type="text/javascript"></script>
 			<script src="js/core/autocomplete-fk.js" defer type="text/javascript"></script>
@@ -355,6 +357,7 @@ EOT;
 		if (!isset($limits)) {
 			$limits = [10, 50, 100, 250, 500, 1000, $conf['max_rows']];
 			sort($limits, SORT_NUMERIC);
+			$limits[] = 0; // 0 means "all rows"
 		}
 		$window = 3;
 
@@ -368,7 +371,7 @@ EOT;
 
 		echo "<div class=\"pagenav-container\">\n";
 
-		echo "<form method=\"get\" action=\"$script?$url\" class=\"pagenav-form\">";
+		echo "<form method=\"get\" action=\"$script?$url\" class=\"pagenav-form mr-3\">";
 		echo "<span class=\"me-1\">{$lang['strjumppage']}</span>\n";
 		echo "<input type=\"number\" class=\"page\" name=\"page\" min=\"1\" max=\"$pages\" value=\"$page\">\n";
 		echo "<button type=\"submit\">↩</button>\n";
@@ -418,15 +421,16 @@ EOT;
 		$query_params = $gets;
 		unset($query_params['max_rows']);
 		$sub_url = http_build_query($query_params);
-		echo "<form method=\"get\" action=\"$script?$sub_url\" class=\"pagenav-form ml-2\">";
+		echo "<form method=\"get\" action=\"$script?$sub_url\" class=\"pagenav-form ml-2 mr-1\">";
 		echo "<span class=\"me-1\">{$lang['strselectmaxrows']}</span>\n";
 		echo "<select name=\"max_rows\" class=\"max_rows\" onchange=\"this.form.querySelector('button[type=submit]').click()\">\n";
 		foreach ($limits as $limit) {
 			$selected = ($limit == $gets['max_rows']) ? ' selected' : '';
-			echo "<option value=\"$limit\"{$selected}>$limit</option>\n";
+			$name = $limit <= 0 ? $lang['strall'] : $limit;
+			echo "<option value=\"$limit\"{$selected}>$name</option>\n";
 		}
 		echo "</select>\n";
-		echo "<button type=\"submit\" style=\"display:none;\"></button>\n";
+		echo "<button type=\"submit\" style=\"display:none\">↩</button>\n";
 		echo "</form>\n";
 
 		echo "</div>\n";
@@ -436,7 +440,7 @@ EOT;
 	 * Render a value into HTML using formatting rules specified
 	 * by a type name and parameters.
 	 *
-	 * @param string $str The string to change
+	 * @param string|null $str The string to change
 	 *
 	 * @param string $type Field type (optional), this may be an internal PostgreSQL type, or:
 	 *         yesno    - same as bool, but renders as 'Yes' or 'No'.
@@ -486,6 +490,7 @@ EOT;
 		}
 
 		$out = '';
+		$class = "field $type";
 
 		switch ($type) {
 			case 'int2':
@@ -495,6 +500,7 @@ EOT;
 			case 'float8':
 			case 'money':
 			case 'numeric':
+			case 'decimal':
 			case 'oid':
 			case 'xid':
 			case 'cid':
@@ -526,13 +532,12 @@ EOT;
 				}
 				break;
 			case 'bytea':
-				$tag = 'div';
-				$class = 'pre';
+				$tag = 'pre';
 				$out = '\x' . strtoupper(bin2hex($str));
 				break;
 			case 'errormsg':
 				$tag = 'pre';
-				$class = 'error';
+				$class .= ' error';
 				$out = htmlspecialchars($str);
 				break;
 			case 'pre':
@@ -543,15 +548,24 @@ EOT;
 				$tag = 'pre';
 				$out = $str;
 				break;
-			case 'sql':
+			case 'json':
+			case 'jsonb':
 				$tag = 'pre';
-				$class = 'sql-viewer';
+				$class .= ' sql-viewer';
+				$attr = 'data-language="json"';
 				$out = htmlspecialchars($str);
 				break;
+			case 'xml':
+				$tag = 'pre';
+				$class .= ' sql-viewer';
+				$attr = 'data-language="xml"';
+				$out = htmlspecialchars($str);
+				break;
+			case 'sql':
 			case 'plpgsql':
 				$tag = 'pre';
-				$class = 'sql-viewer';
-				$attr = 'data-mode="plpgsql"';
+				$class .= ' sql-viewer';
+				$attr = 'data-language="pgsql"';
 				$out = htmlspecialchars($str);
 				break;
 			case 'nbsp':
@@ -593,24 +607,20 @@ EOT;
 					}
 				}
 				break;
+			case 'time':
+			case 'timetz':
+			case 'timestamp':
+			case 'timestamptz':
+			case 'date':
+				$class .= ' highlight-datetime';
 			default:
-				/*
-			// If the string contains at least one instance of >1 space in a row, a tab
-			// character, a space at the start of a line, or a space at the start of
-			// the whole string then render within a pre-formatted element (<pre>).
-			if (preg_match('/(^ |  |\t|\n )/m', $str)) {
-				$tag = 'pre';
-				$class = 'data';
-				$out = htmlspecialchars($str);
-			} else {
-				$out = nl2br(htmlspecialchars($str));
-			}
-			*/
 				$out = nl2br(htmlspecialchars($str));
 		}
 
-		if (isset($params['class']))
-			$class = $params['class'];
+
+		if (isset($params['class'])) {
+			$class .= ' ' . $params['class'];
+		}
 		if (isset($params['align']))
 			$align = $params['align'];
 
@@ -625,6 +635,8 @@ EOT;
 		}
 
 		// Add line numbers if 'lineno' param is true
+		// Still in use?
+		/*
 		if (isset($params['lineno']) && $params['lineno'] === true) {
 			$lines = explode("\n", $str);
 			$num = count($lines);
@@ -638,6 +650,7 @@ EOT;
 			}
 			unset($lines);
 		}
+		*/
 
 		return $out;
 	}

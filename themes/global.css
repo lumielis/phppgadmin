@@ -81,7 +81,7 @@ p.comment {
 }
 
 .pre {
-	white-space: pre;
+	white-space: pre-wrap;
 }
 
 .arg_icon {
@@ -324,7 +324,7 @@ td[class^="opbutton"] img.icon {
 	resize: vertical;
 	/*overflow: auto;*/
 	min-height: 20px;
-	height: 90px;
+	height: 100px;
 	/*max-height: 600px;*/
 }
 
@@ -371,6 +371,14 @@ td[class^="opbutton"] img.icon {
 /* Postgres data type highlighting in ACE editor */
 .ace_editor .ace_support.ace_type {
 	color: #c11a87;
+}
+
+.ace_editor .ace_tag-name.ace_xml {
+	color: #0242c3;
+}
+
+.ace_editor .ace_attribute-name.ace_xml {
+	color: #318495;
 }
 
 a.orderby {
@@ -647,7 +655,6 @@ pre code.hljs {
 }
 
 .hljs-number,
-.hljs-attr,
 .hljs-symbol,
 .hljs-bullet {
 	color: #c1571a;
@@ -657,8 +664,44 @@ pre code.hljs {
 	color: #3c4c72;
 }
 
+.hljs-attr,
 .hljs-quoted-identifier {
 	color: #318495;
+}
+
+.hljs.language-xml .hljs-name {
+	color: #0242c3;
+}
+
+.field.int2,
+.field.int4,
+.field.int8,
+.field.float4,
+.field.float8,
+.field.money,
+.field.numeric,
+.field.decimal,
+.field.oid,
+.field.xid,
+.field.cid,
+.field.tid {
+	color: #c1571a;
+}
+
+.field.bool {
+	color: #0242c3;
+}
+
+.field .dt-date {
+	color: #0242c3;
+}
+
+.field .dt-time {
+	color: #c11a87;
+}
+
+.field .dt-tz {
+	color: #c1571a;
 }
 
 .importStatus {
@@ -678,7 +721,8 @@ pre code.hljs {
 
 .export-form .object-selection-list {
 	height: 150px;
-	overflow-y: auto;
+	overflow: auto;
 	border: 1px solid #ccc;
 	padding: 5px;
+	resize: vertical;
 }

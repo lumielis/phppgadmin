@@ -135,6 +135,7 @@ fieldset {
 	padding: 0.5em;
 	border: 1px solid #ccc;
 	border-radius: 7px;
+	box-shadow: 0px 0px 6px 0 rgba(0, 0, 0, 0.1);
 }
 
 legend {
@@ -164,25 +165,17 @@ table.error td {
 	background-color: #f5f5f5;
 }
 
-table.navbar {
-	background-color: #f5f5f5;
+table.login {
+	padding: 2px;
+	border: 1px solid #ccc;
+	border-collapse: separate;
+	border-radius: 5px;
 }
 
-table.navbar td {
-	height: 25px;
-	color: #000000;
-	background-color: #fdfdfd;
-	text-align: center;
-
-	/*font-size: smaller;*/ /* 0.9em */
-	font-weight: bold;
+#login_form {
+	padding: 5px;
 }
 
-table.navbar td.active {
-	background-color: #f5f5f5;
-}
-
-table#data,
 table.data {
 	min-width: 100%;
 }
@@ -602,10 +595,6 @@ div.logo a {
 	min-width: 26px;
 }
 
-.pagenav-form {
-	margin-right: 1em;
-}
-
 .pagenav-form select {
 	width: auto;
 }
@@ -628,7 +617,7 @@ i.null {
 	border-radius: 7px;
 	/*background: linear-gradient(0deg, #FFF 0%, #f3f3f3 100%);*/
 	/*font-size: 1.05em;*/
-	/*color: #9a7530;*/
+	color: #246799;
 	background: #dff6ff;
 }
 

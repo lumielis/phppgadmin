@@ -1,10 +1,11 @@
 <?php
 
+use PhpPgAdmin\Gui\FormRenderer;
 use PhpPgAdmin\Core\AppContainer;
+use PhpPgAdmin\Database\Actions\RowActions;
+use PhpPgAdmin\Database\Actions\TypeActions;
 use PhpPgAdmin\Database\Actions\TableActions;
 use PhpPgAdmin\Database\Actions\TablespaceActions;
-use PhpPgAdmin\Database\Actions\TypeActions;
-use PhpPgAdmin\Gui\FormRenderer;
 
 /**
  * List tables in a database
@@ -526,156 +527,6 @@ function doSelectRows($confirm, $msg = '')
 }
 
 /**
- * Ask for insert parameters and then actually insert row
- * @deprecated use display.php
- */
-function doInsertRow($confirm, $msg = '')
-{
-	AppContainer::setSkipHtmlFrame(true);
-	require __DIR__ . '/display.php';
-	exit;
-
-	/*
-	throw new Exception("Insert here is disabled, please use display.php instead");
-
-	$data = AppContainer::getData();
-	$misc = AppContainer::getMisc();
-	$conf = AppContainer::getConf();
-	$lang = AppContainer::getLang();
-
-	if ($confirm) {
-		$misc->printTrail('table');
-		$misc->printTabs('table', 'insert');
-
-		$misc->printMsg($msg);
-
-		$attrs = $data->getTableAttributes($_REQUEST['table']);
-
-		if (($conf['autocomplete'] != 'disable')) {
-			$fksprops = $misc->getAutocompleteFKProperties($_REQUEST['table']);
-			if ($fksprops !== false)
-				echo $fksprops['code'];
-		} else $fksprops = false;
-
-		echo "<form action=\"tables.php\" method=\"post\" id=\"ac_form\">\n";
-		if ($attrs->recordCount() > 0) {
-			echo "<table>\n";
-
-			// Output table header
-			echo "<tr><th class=\"data\">{$lang['strcolumn']}</th><th class=\"data\">{$lang['strtype']}</th>";
-			echo "<th class=\"data\">{$lang['strformat']}</th>";
-			echo "<th class=\"data\">{$lang['strnull']}</th><th class=\"data\">{$lang['strvalue']}</th></tr>";
-
-			$i = 0;
-			$fields = [];
-			while (!$attrs->EOF) {
-				$fields[$attrs->fields['attnum']] = $attrs->fields['attname'];
-				$attrs->fields['attnotnull'] = $data->phpBool($attrs->fields['attnotnull']);
-				// Set up default value if there isn't one already
-				if (!isset($_REQUEST['values'][$attrs->fields['attnum']]))
-					$_REQUEST['values'][$attrs->fields['attnum']] = $attrs->fields['adsrc'];
-				// Default format to 'VALUE' if there is no default,
-				// otherwise default to 'EXPRESSION'
-				if (!isset($_REQUEST['format'][$attrs->fields['attnum']]))
-					$_REQUEST['format'][$attrs->fields['attnum']] = ($attrs->fields['adsrc'] === null) ? 'VALUE' : 'EXPRESSION';
-				// Continue drawing row
-				$id = (($i % 2) == 0 ? '1' : '2');
-				echo "<tr class=\"data{$id}\">\n";
-				echo "<td style=\"white-space:nowrap;\">", $misc->printVal($attrs->fields['attname']), "</td>";
-				echo "<td style=\"white-space:nowrap;\">\n";
-				echo $misc->printVal($data->formatType($attrs->fields['type'], $attrs->fields['atttypmod']));
-				echo "<input type=\"hidden\" name=\"types[{$attrs->fields['attnum']}]\" value=\"",
-				html_esc($attrs->fields['type']), "\" /></td>";
-				echo "<td style=\"white-space:nowrap;\">\n";
-				echo "<select name=\"format[{$attrs->fields['attnum']}]\">\n";
-				echo "<option value=\"VALUE\"", ($_REQUEST['format'][$attrs->fields['attnum']] == 'VALUE') ? ' selected="selected"' : '', ">{$lang['strvalue']}</option>\n";
-				echo "<option value=\"EXPRESSION\"", ($_REQUEST['format'][$attrs->fields['attnum']] == 'EXPRESSION') ? ' selected="selected"' : '', ">{$lang['strexpression']}</option>\n";
-				echo "</select>\n</td>\n";
-				echo "<td style=\"white-space:nowrap;\">";
-				// Output null box if the column allows nulls (doesn't look at CHECKs or ASSERTIONS)
-				if (!$attrs->fields['attnotnull']) {
-					echo "<label><span><input type=\"checkbox\" name=\"nulls[{$attrs->fields['attnum']}]\"",
-					isset($_REQUEST['nulls'][$attrs->fields['attnum']]) ? ' checked="checked"' : '', " /></span></label></td>";
-				} else {
-					echo "&nbsp;</td>";
-				}
-				echo "<td id=\"row_att_{$attrs->fields['attnum']}\" style=\"white-space:nowrap;\">";
-				if (($fksprops !== false) && isset($fksprops['byfield'][$attrs->fields['attnum']])) {
-					$data->printField(
-						"values[{$attrs->fields['attnum']}]",
-						$_REQUEST['values'][$attrs->fields['attnum']],
-						'fktype', // force FK
-						[
-							'id' => "attr_{$attrs->fields['attnum']}",
-							'autocomplete' => 'off'
-						]
-					);
-				} else {
-					$data->printField("values[{$attrs->fields['attnum']}]", $_REQUEST['values'][$attrs->fields['attnum']], $attrs->fields['type']);
-				}
-				echo "</td>\n";
-				echo "</tr>\n";
-				$i++;
-				$attrs->moveNext();
-			}
-			echo "</table>\n";
-
-			if (!isset($_SESSION['counter'])) {
-				$_SESSION['counter'] = 0;
-			}
-
-			echo "<input type=\"hidden\" name=\"action\" value=\"insertrow\" />\n";
-			echo "<input type=\"hidden\" name=\"fields\" value=\"", htmlentities(serialize($fields), ENT_QUOTES, 'UTF-8'), "\" />\n";
-			echo "<input type=\"hidden\" name=\"protection_counter\" value=\"" . $_SESSION['counter'] . "\" />\n";
-			echo "<input type=\"hidden\" name=\"table\" value=\"", html_esc($_REQUEST['table']), "\" />\n";
-			echo "<p><input type=\"submit\" name=\"insert\" value=\"{$lang['strinsert']}\" />\n";
-			echo "<input type=\"submit\" name=\"insertandrepeat\" accesskey=\"r\" value=\"{$lang['strinsertandrepeat']}\" />\n";
-			echo "<input type=\"submit\" name=\"cancel\" value=\"{$lang['strcancel']}\" />\n";
-
-			if ($fksprops !== false) {
-				if ($conf['autocomplete'] != 'default off')
-					echo "<input type=\"checkbox\" id=\"no_ac\" value=\"1\" checked=\"checked\" /><label for=\"no_ac\">{$lang['strac']}</label>\n";
-				else
-					echo "<input type=\"checkbox\" id=\"no_ac\" value=\"0\" /><label for=\"no_ac\">{$lang['strac']}</label>\n";
-			}
-			echo "</p>\n";
-		} else {
-			echo "<p>{$lang['strnofieldsforinsert']}</p>\n";
-			echo "<input type=\"submit\" name=\"cancel\" value=\"{$lang['strcancel']}\" />\n";
-		}
-		echo $misc->form;
-		echo "</form>\n";
-	} else {
-		if (!isset($_POST['values'])) $_POST['values'] = [];
-		if (!isset($_POST['nulls'])) $_POST['nulls'] = [];
-		$_POST['fields'] = unserialize(htmlspecialchars_decode($_POST['fields'], ENT_QUOTES));
-
-		if ($_SESSION['counter']++ == $_POST['protection_counter']) {
-			$status = $data->insertRow(
-				$_POST['table'],
-				$_POST['fields'],
-				$_POST['values'],
-				$_POST['nulls'],
-				$_POST['format'],
-				$_POST['types']
-			);
-			if ($status == 0) {
-				if (isset($_POST['insert']))
-					doDefault($lang['strrowinserted']);
-				else {
-					$_REQUEST['values'] = [];
-					$_REQUEST['nulls'] = [];
-					doInsertRow(true, $lang['strrowinserted']);
-				}
-			} else
-				doInsertRow(true, $lang['strrowinsertedbad']);
-		} else
-			doInsertRow(true, $lang['strrowduplicate']);
-	}
-	*/
-}
-
-/**
  * Show confirmation of empty and perform actual empty
  */
 function doEmpty($confirm)
@@ -1161,15 +1012,6 @@ switch ($action) {
 		break;
 	case 'confselectrows':
 		doSelectRows(true);
-		break;
-	case 'insertrow':
-		if (!isset($_POST['cancel']))
-			doInsertRow(false);
-		else
-			doDefault();
-		break;
-	case 'confinsertrow':
-		doInsertRow(true);
 		break;
 	case 'empty':
 		if (isset($_POST['empty']))
