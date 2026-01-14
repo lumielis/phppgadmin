@@ -82,7 +82,10 @@
 
 			fetch(url.toString())
 				.then((response) => {
-					if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+					if (!response.ok)
+						throw new Error(
+							`HTTP error! status: ${response.status}`
+						);
 					return response.text();
 				})
 				.then((htmlContent) => {
@@ -91,7 +94,8 @@
 				.catch((error) => {
 					const errorMsg = document.createElement("p");
 					errorMsg.className = "errmsg";
-					errorMsg.textContent = Display.errmsg || "Error loading foreign key data";
+					errorMsg.textContent =
+						Display.errmsg || "Error loading foreign key data";
 					this.container.appendChild(errorMsg);
 				})
 				.finally(() => {
@@ -151,7 +155,11 @@
 			this.popperInstances.set(popupDiv, popperInstance);
 
 			// Track open popup
-			this.openPopups.push({ element: popupDiv, triggerLink, constraintClass });
+			this.openPopups.push({
+				element: popupDiv,
+				triggerLink,
+				constraintClass,
+			});
 
 			// Setup hover highlight effect
 			this.setupHighlightEffect(popupDiv, triggerLink, constraintClass);
@@ -222,7 +230,9 @@
 		 */
 		closePopup(popupDiv) {
 			// Remove from tracking array
-			const index = this.openPopups.findIndex((p) => p.element === popupDiv);
+			const index = this.openPopups.findIndex(
+				(p) => p.element === popupDiv
+			);
 			if (index !== -1) {
 				this.openPopups.splice(index, 1);
 			}
@@ -275,7 +285,9 @@
 			const col = a.dataset.col;
 			const url = new URL(a.href, window.location.origin);
 			const params = new URLSearchParams(url.search);
-			const initialDir = /date|timestamp/.test(a.dataset.type) ? "desc" : "asc";
+			const initialDir = /date|timestamp/.test(a.dataset.type)
+				? "desc"
+				: "asc";
 
 			let orderby = {};
 			for (const [key, val] of params.entries()) {
@@ -305,8 +317,12 @@
 			[...params.keys()].forEach((k) => {
 				if (k.startsWith("orderby[")) params.delete(k);
 			});
+			params.delete("orderby_clear");
 			for (const [c, dir] of Object.entries(orderby)) {
 				params.set(`orderby[${c}]`, dir);
+			}
+			if (Object.keys(orderby).length === 0) {
+				params.set("orderby_clear", "1");
 			}
 
 			url.search = params.toString();
@@ -327,8 +343,19 @@
 		});
 	});
 
-	// Virtual Frame Event
+	// Ensure initialization only happens once
+	if (!window.displayJsInitialized) window.displayJsInitialized = true;
+	else return;
+
+	// Virtual Frame Load Event
 	document.addEventListener("frameLoaded", function (e) {
+		//window.clearTimeout(tooltipTimout);
+		//window.hideTooltip();
+	});
+
+	// Virtual Frame Unload Event
+	document.addEventListener("beforeFrameUnload", () => {
+		FKPopupManager.unload();
 		window.clearTimeout(tooltipTimout);
 		window.hideTooltip();
 	});

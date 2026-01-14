@@ -593,6 +593,7 @@ function printTableHeaderCells($rs, $args, $withOid)
 	$pg = AppContainer::getPostgres();
 	$conf = AppContainer::getConf();
 	$j = 0;
+	$noOrderBy = ['json' => true, 'xml' => true];
 
 	foreach ($rs->fields as $k => $v) {
 
@@ -611,15 +612,21 @@ function printTableHeaderCells($rs, $args, $withOid)
 
 			$keys = array_keys($_REQUEST['orderby']);
 
-			echo "<th class=\"data\"><span><a class=\"orderby\" data-col=\"", htmlspecialchars($finfo->name), "\" data-type=\"", htmlspecialchars($finfo->type), "\" href=\"display.php?{$sortLink}\"><span>", htmlspecialchars($finfo->name), "</span>";
-			if (isset($_REQUEST['orderby'][$finfo->name])) {
-				if ($_REQUEST['orderby'][$finfo->name] === 'desc')
-					echo '<img src="' . $misc->icon('LowerArgument') . '" alt="desc">';
-				else
-					echo '<img src="' . $misc->icon('RaiseArgument') . '" alt="asc">';
-				echo "<span class='small'>", array_search($finfo->name, $keys) + 1, "</span>";
+			echo "<th class=\"data\">\n";
+			if (!isset($noOrderBy[$finfo->type])) {
+				echo "<span><a class=\"orderby\" data-col=\"", htmlspecialchars($finfo->name), "\" data-type=\"", htmlspecialchars($finfo->type), "\" href=\"display.php?{$sortLink}\"><span>", htmlspecialchars($finfo->name), "</span>";
+				if (isset($_REQUEST['orderby'][$finfo->name])) {
+					if ($_REQUEST['orderby'][$finfo->name] === 'desc')
+						echo '<img src="' . $misc->icon('LowerArgument') . '" alt="desc">';
+					else
+						echo '<img src="' . $misc->icon('RaiseArgument') . '" alt="asc">';
+					echo "<span class='small'>", array_search($finfo->name, $keys) + 1, "</span>";
+				}
+				echo "</a></span>\n";
+			} else {
+				echo "<span>", htmlspecialchars($finfo->name), "</span>\n";
 			}
-			echo "</a></span></th>\n";
+			echo "</th>\n";
 		}
 		$j++;
 	}
@@ -925,6 +932,8 @@ function doBrowse($msg = '')
 	if (!isset($_REQUEST['page']))
 		$_REQUEST['page'] = 1;
 
+	$orderbyClearRequested = !empty($_REQUEST['orderby_clear']);
+
 	// If 'orderby' is not set, default to []
 	if (!isset($_REQUEST['orderby']))
 		$_REQUEST['orderby'] = [];
@@ -947,51 +956,36 @@ function doBrowse($msg = '')
 	}
 
 	$orderBySet = false;
-	if (!empty($_POST['query'])) {
-		// sql query has been posted, update orderby fields
-		if (!empty($parsed['ORDER'])) {
-			foreach ($parsed['ORDER'] as $orderExpr) {
-				$field = trim($orderExpr['base_expr'], " \t\n\r\0\x0B;");
-				if (preg_match('/^"(?:[^"]|"")*"$/', $field)) {
-					$field = str_replace('""', '"', substr($field, 1, -1));
-				} elseif (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $field)) {
-					// skip unknown expressions
-					continue;
-				}
-				$dir = strtolower($orderExpr['direction'] ?? '');
-				if ($dir !== 'desc') {
-					$dir = 'asc';
-				}
-				$_REQUEST['orderby'][$field] = $dir;
-			}
-			$orderBySet = true;
-		}
-	} elseif (!empty($_REQUEST['orderby'])) {
-		// update orderby in sql query
-		if (!empty($parsed['SELECT'])) {
+	$orderbyIsNonEmpty = is_array($_REQUEST['orderby']) && !empty($_REQUEST['orderby']);
+	if ($orderbyClearRequested) {
+		$_REQUEST['orderby'] = [];
+		$orderbyIsNonEmpty = false;
+	}
 
-			if (!empty($_REQUEST['orderby'])) {
-				$newOrderBy = ' ORDER BY ';
+	if ($orderbyIsNonEmpty || $orderbyClearRequested) {
+		// Header links / client-side sorting: update ORDER BY in the SQL query.
+		if (!empty($parsed['SELECT'])) {
+			$newOrderBy = '';
+			if ($orderbyIsNonEmpty) {
+				$newOrderBy = 'ORDER BY ';
 				$sep = "";
 				foreach ($_REQUEST['orderby'] as $field => $dir) {
 					$dir = strcasecmp($dir, 'desc') === 0 ? 'DESC' : 'ASC';
 					$newOrderBy .= $sep . pg_escape_id($field) . ' ' . $dir;
 					$sep = ", ";
 				}
-			} else {
-				$newOrderBy = "";
 			}
 
 			if (!empty($parsed['ORDER'])) {
-				$pattern = '/ORDER\s+BY[\s\S]*?(?=\sLIMIT|\sOFFSET|\sFETCH|\sFOR|\sUNION|\sINTERSECT|\sEXCEPT|\)|--|\/\*|;|\s*$)/i';
+				$pattern = '/\s*ORDER\s+BY[\s\S]*?(?=\sLIMIT|\sOFFSET|\sFETCH|\sFOR|\sUNION|\sINTERSECT|\sEXCEPT|\)|--|\/\*|;|\s*$)/i';
 				preg_match_all($pattern, $query, $matches);
 
 				if (!empty($matches[0])) {
 					$lastOrderBy = end($matches[0]);
-					$query = str_replace($lastOrderBy, $newOrderBy, $query);
+					$query = str_replace($lastOrderBy, $newOrderBy === '' ? '' : ' ' . $newOrderBy, $query);
 					$orderBySet = true;
 				}
-			} elseif (!empty($newOrderBy)) {
+			} elseif ($newOrderBy !== '') {
 				$query = rtrim($query, " \t\n\r\0\x0B;");
 
 				$pattern = '/\s*(?:'
@@ -1006,14 +1000,33 @@ function doBrowse($msg = '')
 
 				if (preg_match($pattern, $query, $matches, PREG_OFFSET_CAPTURE)) {
 					$endPos = $matches[0][1];
-					$query = substr($query, 0, $endPos) . $newOrderBy . substr($query, $endPos);
+					$query = substr($query, 0, $endPos) . ' ' . $newOrderBy . substr($query, $endPos);
 				} else {
-					$query .= $newOrderBy;
+					$query .= ' ' . $newOrderBy;
 				}
 
 				$query .= ';';
 				$orderBySet = true;
 			}
+		}
+	} else {
+		// No explicit orderby params: sync the arrows from ORDER BY inside the query.
+		if (!empty($parsed['ORDER'])) {
+			$_REQUEST['orderby'] = [];
+			foreach ($parsed['ORDER'] as $orderExpr) {
+				$field = trim($orderExpr['base_expr'], " \t\n\r\0\x0B;");
+				if (preg_match('/^"(?:[^"]|"")*"$/', $field)) {
+					$field = str_replace('""', '"', substr($field, 1, -1));
+				} elseif (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $field)) {
+					continue;
+				}
+				$dir = strtolower($orderExpr['direction'] ?? '');
+				if ($dir !== 'desc') {
+					$dir = 'asc';
+				}
+				$_REQUEST['orderby'][$field] = $dir;
+			}
+			$orderBySet = true;
 		}
 	}
 
@@ -1184,6 +1197,8 @@ function doBrowse($msg = '')
 
 	$_sub_params = $_gets;
 	unset($_sub_params['query']);
+	unset($_sub_params['orderby']);
+	unset($_sub_params['orderby_clear']);
 	// We adjust the form method via javascript to avoid length limits on GET requests
 	?>
 	<form method="get" onsubmit="adjustQueryFormMethod(this)" action="display.php?<?= http_build_query($_sub_params) ?>">
@@ -1196,6 +1211,11 @@ function doBrowse($msg = '')
 	<?php
 
 	echo '<div class="query-result-line">', htmlspecialchars($status_line), '</div>', "\n";
+
+	if (strlen($query) > $conf['max_get_query_length']) {
+		// Use query from session if too long for GET
+		unset($_gets['query']);
+	}
 
 	if (is_object($rs) && $rs->recordCount() > 0) {
 		// Show page navigation
