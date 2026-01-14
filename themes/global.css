@@ -3,6 +3,24 @@
  **/
 @import url(./helper.css);
 
+@font-face {
+	font-family: "pga-symbols";
+	src: url("default/symbols/pga-symbols.woff2") format("woff2"),
+		url("default/symbols/pga-symbols.woff") format("woff");
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+}
+
+.psm {
+	font-family: "pga-symbols";
+	font-style: normal;
+	font-weight: normal;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	vertical-align: top;
+}
+
 :root {
 	--tooltip-bg: rgba(55, 55, 55, 0.75);
 	--tooltip-color: #fff;
@@ -445,10 +463,6 @@ a.orderby {
 	border-top: 5px solid transparent;
 	border-bottom: 5px solid transparent;
 	border-right: 5px solid var(--tooltip-bg);
-}
-
-.bottom-footer {
-	/*margin-bottom: 10px;*/
 }
 
 #loading-indicator {

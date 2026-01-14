@@ -169,11 +169,6 @@ class RowActions extends AbstractActions
 
 		skip_count:
 
-		// Set fetch mode to NUM so that duplicate field names are properly returned
-		// for non-table queries.  !Disabled for now.
-		if ($type == 'QUERY')
-			$this->connection->conn->setFetchMode(ADODB_FETCH_NUM);
-
 		// Add ORDER BY fields
 		if (!empty($orderby)) {
 			$order_by = " ORDER BY ";
@@ -200,8 +195,20 @@ class RowActions extends AbstractActions
 			return $rs;
 		}
 
+		// Set fetch mode to NUM so that duplicate field names are properly
+		// returned
+		//if ($type == 'QUERY')
+		$this->connection->conn->setFetchMode(ADODB_FETCH_NUM);
+
 		// Actually retrieve the rows, with offset and limit
-		$rs = $this->connection->selectSet("SELECT * FROM ({$query}) AS sub {$order_by} LIMIT {$page_size} OFFSET {$this->lastQueryOffset}");
+		$rs = $this->connection->selectSet(
+			"SELECT * FROM ({$query}) AS sub
+			{$order_by}
+			LIMIT {$page_size} OFFSET {$this->lastQueryOffset}"
+		);
+
+		$this->connection->conn->setFetchMode(ADODB_FETCH_ASSOC);
+
 		$status = $this->connection->endTransaction();
 		if ($status != 0) {
 			$this->connection->rollbackTransaction();

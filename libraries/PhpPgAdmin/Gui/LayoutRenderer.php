@@ -374,11 +374,11 @@ EOT;
 		echo "<form method=\"get\" action=\"$script?$url\" class=\"pagenav-form mr-3\">";
 		echo "<span class=\"me-1\">{$lang['strjumppage']}</span>\n";
 		echo "<input type=\"number\" class=\"page\" name=\"page\" min=\"1\" max=\"$pages\" value=\"$page\">\n";
-		echo "<button type=\"submit\">↩</button>\n";
+		echo "<button type=\"submit\" class=\"psm\">↩</button>\n";
 		echo "</form>\n";
 
 
-		$class = ($page > 1) ? "pagenav" : "pagenav disabled";
+		$class = ($page > 1) ? "pagenav psm" : "pagenav psm disabled";
 		echo "<a class=\"$class\" href=\"$script?{$url}&page=" . max(1, $page - 1) . "\">⮜</a>\n";
 
 		echo "<a class=\"pagenav" . ($page == 1 ? " current" : "") . "\" href=\"$script?{$url}&page=1\">1</a>\n";
@@ -415,7 +415,7 @@ EOT;
 			echo "<a class=\"pagenav" . ($page == $pages ? " current" : "") . "\" href=\"$script?{$url}&page={$pages}\">$pages</a>\n";
 		}
 
-		$class = ($page < $pages) ? "pagenav" : "pagenav disabled";
+		$class = ($page < $pages) ? "pagenav psm" : "pagenav psm disabled";
 		echo "<a class=\"$class\" href=\"$script?{$url}&page=" . ($page + 1) . "\">⮞</a>\n";
 
 		$query_params = $gets;
@@ -430,7 +430,7 @@ EOT;
 			echo "<option value=\"$limit\"{$selected}>$name</option>\n";
 		}
 		echo "</select>\n";
-		echo "<button type=\"submit\" style=\"display:none\">↩</button>\n";
+		echo "<button type=\"submit\" style=\"display:none\">&nbsp;</button>\n";
 		echo "</form>\n";
 
 		echo "</div>\n";
