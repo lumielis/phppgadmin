@@ -644,8 +644,7 @@ function doDelRow($confirm)
 function doDownloadBytea()
 {
 	$pg = AppContainer::getPostgres();
-	$misc = AppContainer::getMisc();
-	$lang = AppContainer::getLang();
+	$conf = AppContainer::getConf();
 	$tableActions = new TableActions($pg);
 	$schemaActions = new SchemaActions($pg);
 
@@ -740,27 +739,48 @@ function doDownloadBytea()
 	}
 	$totalSize = (int) $totalSize;
 
+	$chunkSize = $conf['bytea_download_chunk_size'] ?? 5 * 1024 * 1024;
+
 	$range = $_SERVER['HTTP_RANGE'] ?? '';
+	$hasRange = false;
+	$start = 0;
+	$end = $totalSize - 1;
+
 	if ($range && preg_match('/bytes=(\d+)-(\d*)/i', $range, $matches)) {
+		$hasRange = true;
 		$start = (int) $matches[1];
 		$end = ($matches[2] !== '') ? (int) $matches[2] : ($totalSize - 1);
-		if ($start >= $totalSize || $start < 0) {
-			header('HTTP/1.1 416 Range Not Satisfiable');
-			header('Content-Range: bytes */' . $totalSize);
-			exit;
-		}
 		if ($end >= $totalSize) {
 			$end = $totalSize - 1;
 		}
-		if ($end < $start) {
+		if ($start >= $totalSize || $start < 0 || $end < $start) {
 			header('HTTP/1.1 416 Range Not Satisfiable');
 			header('Content-Range: bytes */' . $totalSize);
 			exit;
 		}
+	}
 
-		$length = $end - $start + 1;
-		$offset = $start + 1;
-		$chunkSql = 'SELECT substring(' . $pg->escapeIdentifier($column) . ' FROM ' . $offset . ' FOR ' . $length . ') AS chunk' .
+	$length = $end - $start + 1;
+
+	if ($hasRange) {
+		header('HTTP/1.1 206 Partial Content');
+		header('Content-Range: bytes ' . $start . '-' . $end . '/' . $totalSize);
+	} else {
+		header('HTTP/1.1 200 OK');
+	}
+
+	header('Content-Type: application/octet-stream');
+	header('Content-Disposition: attachment; filename="' . $filename . '"');
+	header('Accept-Ranges: bytes');
+	header('Content-Length: ' . $length);
+	header('Cache-Control: must-revalidate');
+	header('Pragma: public');
+
+	for ($offset = $start; $offset <= $end; $offset += $chunkSize) {
+		$remaining = $end - $offset + 1;
+		$readLen = ($remaining > $chunkSize) ? $chunkSize : $remaining;
+		$sqlOffset = $offset + 1;
+		$chunkSql = 'SELECT substring(' . $pg->escapeIdentifier($column) . ' FROM ' . $sqlOffset . ' FOR ' . $readLen . ') AS chunk' .
 			' FROM ' . $pg->escapeIdentifier($schema) . '.' . $pg->escapeIdentifier($table) .
 			' WHERE ' . $whereClause .
 			' LIMIT 1';
@@ -776,46 +796,15 @@ function doDownloadBytea()
 			echo 'Data is NULL';
 			exit;
 		}
-
-		header('HTTP/1.1 206 Partial Content');
-		header('Content-Type: application/octet-stream');
-		header('Content-Disposition: attachment; filename="' . $filename . '"');
-		header('Accept-Ranges: bytes');
-		header('Content-Range: bytes ' . $start . '-' . $end . '/' . $totalSize);
-		header('Content-Length: ' . $length);
-		header('Cache-Control: must-revalidate');
-		header('Pragma: public');
-
 		echo $chunk;
-		exit;
-	}
-
-	$sql = 'SELECT ' . $pg->escapeIdentifier($column) . ' AS data' .
-		' FROM ' . $pg->escapeIdentifier($schema) . '.' . $pg->escapeIdentifier($table) .
-		' WHERE ' . $whereClause .
-		' LIMIT 1';
-	$result = $pg->selectSet($sql);
-	if ($result && $result->recordCount() === 1) {
-		$data = $result->fields['data'];
-		if ($data === null) {
-			header('HTTP/1.0 404 Not Found');
-			echo 'Data is NULL';
-			exit;
+		if (function_exists('flush')) {
+			flush();
 		}
-
-		header('Content-Type: application/octet-stream');
-		header('Content-Disposition: attachment; filename="' . $filename . '"');
-		header('Accept-Ranges: bytes');
-		header('Content-Length: ' . ($totalSize > 0 ? $totalSize : strlen($data)));
-		header('Cache-Control: must-revalidate');
-		header('Pragma: public');
-
-		echo $data;
-		exit;
+		if (function_exists('ob_flush')) {
+			ob_flush();
+		}
 	}
 
-	header('HTTP/1.0 404 Not Found');
-	echo 'Data not found';
 	exit;
 }
 
