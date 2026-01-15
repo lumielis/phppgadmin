@@ -356,8 +356,11 @@ function doExport($msg = '')
 	$exportRenderer = new ExportFormRenderer();
 	$exportRenderer->renderExportForm('database', [
 		'name' => 'schemas',
-		'icon' => 'Schema',
-		'objects' => $schemaNames
+		//'icon' => 'Schema',
+		//'objects' => $schemaNames,
+		'objects_by_type' => [
+			'schemas' => $schemaNames,
+		],
 	]);
 }
 
@@ -470,6 +473,7 @@ function currentProcesses($isAjax = false)
 		'query' => [
 			'title' => $lang['strsql'],
 			'field' => field('query'),
+			'type' => 'sql',
 		],
 		'start_time' => [
 			'title' => $lang['strstarttime'],

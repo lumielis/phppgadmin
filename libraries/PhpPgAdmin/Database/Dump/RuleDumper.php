@@ -5,7 +5,7 @@ namespace PhpPgAdmin\Database\Dump;
 /**
  * Dumper for PostgreSQL rules.
  */
-class RuleDumper extends AbstractDumper
+class RuleDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {

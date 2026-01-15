@@ -5,7 +5,7 @@ namespace PhpPgAdmin\Database\Dump;
 /**
  * Dumper for PostgreSQL domains.
  */
-class DomainDumper extends AbstractDumper
+class DomainDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {
@@ -21,12 +21,14 @@ class DomainDumper extends AbstractDumper
         $this->connection->clean($c_domain);
         $this->connection->clean($c_schema);
 
-        $sql = "SELECT t.oid, t.typname, pg_catalog.format_type(t.typbasetype, t.typtypmod) AS basetype,
-                       t.typdefault, t.typnotnull,
-                       (SELECT pg_catalog.obj_description(t.oid, 'pg_type')) AS comment
+        $sql = "SELECT t.oid, t.typname,
+                pg_catalog.format_type(t.typbasetype, t.typtypmod) AS basetype,
+                t.typdefault, t.typnotnull,
+                (SELECT pg_catalog.obj_description(t.oid, 'pg_type')) AS comment
                 FROM pg_catalog.pg_type t
                 JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-                WHERE t.typname = '{$c_domain}' AND n.nspname = '{$c_schema}' AND t.typtype = 'd'";
+                WHERE t.typname = '{$c_domain}' AND n.nspname = '{$c_schema}'
+                    AND t.typtype = 'd'";
 
         $rs = $this->connection->selectSet($sql);
 
@@ -58,7 +60,11 @@ class DomainDumper extends AbstractDumper
 
         if ($this->shouldIncludeComments($options) && isset($rs->fields['comment']) && $rs->fields['comment'] !== null) {
             $this->connection->clean($rs->fields['comment']);
-            $this->write("COMMENT ON DOMAIN \"" . addslashes($c_schema) . "\".\"" . addslashes($c_domain) . "\" IS '{$rs->fields['comment']}';\\n");
+            $this->write(
+                "COMMENT ON DOMAIN \"" . addslashes($c_schema) .
+                "\".\"" . addslashes($c_domain) .
+                "\" IS '{$rs->fields['comment']}';\n"
+            );
         }
 
         $this->writePrivileges($domainName, 'type', $schema);

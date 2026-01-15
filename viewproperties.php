@@ -125,7 +125,7 @@ function doDefinition($msg = '')
 
 		echo "<table style=\"width: 100%\">\n";
 		echo "<tr><th class=\"data\">{$lang['strdefinition']}</th></tr>\n";
-		echo "<tr><td class=\"data1\"><div class=\"sql-viewer\">", $misc->printVal($vdata->fields['vwdefinition']), "</div></td></tr>\n";
+		echo "<tr><td class=\"data1\"><pre class=\"sql-viewer\">", $misc->printVal($vdata->fields['vwdefinition']), "</pre></td></tr>\n";
 		echo "</table>\n";
 	} else
 		echo "<p>{$lang['strnodata']}</p>\n";

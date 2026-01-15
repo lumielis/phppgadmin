@@ -14,10 +14,10 @@ class DumpFactory
      * 
      * @param string $subject
      * @param Postgres|null $connection
-     * @return AbstractDumper
+     * @return ExportDumper
      * @throws \Exception If subject is not supported
      */
-    public static function create($subject, Postgres $connection = null)
+    public static function create($subject, Postgres $connection = null): ExportDumper
     {
         $className = __NAMESPACE__ . '\\' . ucfirst(strtolower($subject)) . 'Dumper';
 

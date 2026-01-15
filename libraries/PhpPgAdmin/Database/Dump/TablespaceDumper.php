@@ -7,7 +7,7 @@ use PhpPgAdmin\Database\Actions\TablespaceActions;
 /**
  * Dumper for PostgreSQL tablespaces.
  */
-class TablespaceDumper extends AbstractDumper
+class TablespaceDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {

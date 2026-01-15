@@ -5,7 +5,7 @@ namespace PhpPgAdmin\Database\Dump;
 /**
  * Dumper for PostgreSQL triggers.
  */
-class TriggerDumper extends AbstractDumper
+class TriggerDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {

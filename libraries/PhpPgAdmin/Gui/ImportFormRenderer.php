@@ -45,48 +45,38 @@ class ImportFormRenderer extends AbstractContext
             <fieldset>
                 <legend><?= $lang['stroptions'] ?></legend>
                 <?php if ($scope === 'server'): ?>
-                    <div><label><input type="checkbox" name="opt_roles" checked /> <?= $lang['strimportroles'] ?></label></div>
-                    <div><label><input type="checkbox" name="opt_tablespaces" checked />
+                    <div class="my-1 ml-1"><label><input type="checkbox" name="opt_roles" checked />
+                            <?= $lang['strimportroles'] ?></label></div>
+                    <div class="my-1 ml-1"><label><input type="checkbox" name="opt_tablespaces" checked />
                             <?= $lang['strimporttablespaces'] ?></label></div>
-                    <div><label><input type="checkbox" name="opt_databases" checked />
+                    <div class="my-1 ml-1"><label><input type="checkbox" name="opt_databases" checked />
                             <?= $lang['strimportdatabases'] ?></label></div>
                 <?php endif; ?>
                 <?php if ($scope === 'database' || $scope === 'server'): ?>
-                    <div><label><input type="checkbox" name="opt_schema_create" checked />
+                    <div class="my-1 ml-1"><label><input type="checkbox" name="opt_schema_create" checked />
                             <?= $lang['strcreateschema'] ?></label></div>
                 <?php endif; ?>
-                <div><label><input type="checkbox" name="opt_data" checked />
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_data" checked />
                         <?= $lang['strimportdata'] ?></label></div>
                 <?php if ($scope === 'schema' || $scope === 'table'): ?>
-                    <div><label><input type="checkbox" name="opt_truncate" /> <?= $lang['strtruncatebefore'] ?></label></div>
+                    <div class="my-1 ml-1"><label><input type="checkbox" name="opt_truncate" />
+                            <?= $lang['strtruncatebefore'] ?></label>
+                    </div>
                 <?php endif; ?>
-                <div><label><input type="checkbox" name="opt_ownership" checked />
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_ownership" checked />
                         <?= $lang['strimportownership'] ?></label></div>
-                <div><label><input type="checkbox" name="opt_rights" checked />
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_rights" checked />
                         <?= $lang['strimportrights'] ?></label></div>
-                <div><label><input type="checkbox" name="opt_defer_self" checked /> <?= $lang['strdeferself'] ?></label></div>
-                <div><label><input type="checkbox" name="opt_allow_drops" />
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_defer_self" checked />
+                        <?= $lang['strdeferself'] ?></label></div>
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_allow_drops" />
                         <?= $lang['strimportallowdrops'] ?></label></div>
                 <?php if (function_exists('gzopen')): ?>
-                    <div style="margin-top:8px"><label><input type="checkbox" name="opt_compress_chunks" />
+                    <div class="my-1 ml-1"><label><input type="checkbox" name="opt_compress_chunks" />
                             <?= $lang['strimportcompresschunks'] ?></label></div>
                 <?php endif; ?>
-            </fieldset>
-
-            <fieldset>
-                <legend><?= $lang['strerrorhandling'] ?? 'Error handling' ?></legend>
-                <div><label><input type="radio" name="opt_error_mode" value="abort" checked />
-                        <?= $lang['strimporterrorabort'] ?? 'Abort on first error' ?></label></div>
-                <div><label><input type="radio" name="opt_error_mode" value="log" />
-                        <?= $lang['strimporterrorlog'] ?? 'Log errors and continue' ?></label></div>
-                <div><label><input type="radio" name="opt_error_mode" value="ignore" />
-                        <?= $lang['strimporterrorignore'] ?? 'Ignore errors (not recommended)' ?></label></div>
-                <!--
-                <div style="margin-top:6px"><label>
-                        <?= $lang['strskipstatements'] ?? 'Skip statements' ?>:
-                        <input type="number" name="skip_statements" value="0" min="0" style="width:80px" />
-                    </label></div>
-                -->
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_stop_on_error" checked />
+                        <?= $lang['strimportstoponerror'] ?? 'Stop on error' ?></label></div>
             </fieldset>
 
             <div class="form-group">

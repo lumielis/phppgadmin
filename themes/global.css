@@ -734,9 +734,13 @@ pre code.hljs {
 }
 
 .export-form .object-selection-list {
-	height: 150px;
+	height: 140px;
 	overflow: auto;
 	border: 1px solid #ccc;
 	padding: 5px;
 	resize: vertical;
+}
+
+.export-form .object-selection-list > div {
+	margin-right: 1em;
 }

@@ -10,7 +10,7 @@ use PhpPgAdmin\Database\Postgres;
 /**
  * Base class for all dumpers providing shared utilities.
  */
-abstract class AbstractDumper extends AbstractContext
+abstract class ExportDumper extends AbstractContext
 {
     /**
      * @var Postgres
@@ -42,7 +42,7 @@ abstract class AbstractDumper extends AbstractContext
      * 
      * @param string $subject
      * @param Postgres $connection
-     * @return AbstractDumper
+     * @return ExportDumper
      */
     protected function createSubDumper($subject, $connection = null)
     {

@@ -57,6 +57,10 @@ $use_pg_dumpall = ($dumper === 'pg_dumpall');
 $use_pgdump = ($dumper === 'pgdump');
 $use_internal = !$use_pg_dumpall && !$use_pgdump;
 $filename_base = generateDumpFilename($_REQUEST['subject'], $_REQUEST);
+$filename_base .= ".sql";
+
+// Disable HTML errors for clean output
+ini_set('html_errors', '0');
 
 // ============================================================================
 // INTERNAL PHP DUMPER PATH
@@ -64,10 +68,10 @@ $filename_base = generateDumpFilename($_REQUEST['subject'], $_REQUEST);
 if ($use_internal) {
 	$subject = $_REQUEST['subject'] ?? 'database';
 	$params = [
-		'table' => $_REQUEST['table'] ?? null,
-		'view' => $_REQUEST['view'] ?? null,
+		'database' => $_REQUEST['database'] ?? null,
 		'schema' => $_REQUEST['schema'] ?? null,
-		'database' => $_REQUEST['database'] ?? null
+		//'table' => $_REQUEST['table'] ?? null,
+		//'view' => $_REQUEST['view'] ?? null,
 	];
 	// Determine the actual export format based on output_format and insert_format
 	// output_format = sql/csv/tab/html/xml/json
@@ -83,7 +87,9 @@ if ($use_internal) {
 		'export_tablespaces' => isset($_REQUEST['export_tablespaces']),
 		'structure_only' => ($_REQUEST['what'] === 'structureonly'),
 		'data_only' => ($_REQUEST['what'] === 'dataonly'),
-		'objects' => isset($_REQUEST['objects']) ? (array) $_REQUEST['objects'] : [],
+		'export_all_objects' => isset($_REQUEST['export_all_objects']),
+		'objects' => isset($_REQUEST['export_all_objects']) ? null : ($_REQUEST['objects'] ?? []),
+		'include_schema_objects' => isset($_REQUEST['include_schema_objects']),
 		'insert_format' => $insert_format,
 		'truncate_tables' => isset($_REQUEST['truncate_tables']),
 		'add_create_database' => isset($_REQUEST['add_create_database']),
@@ -116,22 +122,8 @@ if ($use_internal) {
 		$dumper->setOutputStream($output_stream);
 	}
 
-	// If multiple databases are requested, iterate through each
-	if (!empty($options['objects'])) {
-		foreach ($options['objects'] as $obj_name) {
-			$name = $subjectObjectMap[$subject] ?? '';
-			$params[$name] = $obj_name;
-			$dumper->dump($subject, $params, $options);
-
-			// Flush stream periodically
-			if ($output_stream) {
-				fflush($output_stream);
-			}
-		}
-	} else {
-		// Single database/schema/table/etc
-		$dumper->dump($subject, $params, $options);
-	}
+	// Dump database/schema/table/etc
+	$dumper->dump($subject, $params, $options);
 
 	// Handle output stream closing
 	if ($output_method !== 'show' && isset($strategy) && isset($handle)) {
@@ -206,13 +198,14 @@ if ($use_pg_dumpall) {
 // AND structure+data then use pg_dumpall instead for efficiency
 if ($use_pgdump) {
 	$subject = $_REQUEST['subject'] ?? 'database';
-	$selected_objects = isset($_REQUEST['objects']) ? array_values((array) $_REQUEST['objects']) : [];
+	$filtering_enabled = !isset($_REQUEST['export_all_objects']);
+	$selected_objects = $_REQUEST['objects'] ?? [];
 	$what = $_REQUEST['what'] ?? 'structureanddata';
 	$export_roles = isset($_REQUEST['export_roles']);
 	$export_tablespaces = isset($_REQUEST['export_tablespaces']);
 
-	// When exporting at server scope with pg_dump, user must pick databases
-	if ($subject === 'server' && empty($selected_objects)) {
+	// When exporting at server scope with pg_dump, user must pick databases only if filtering is enabled
+	if ($subject === 'server' && $filtering_enabled && empty($selected_objects)) {
 		if ($output_method === 'show') {
 			ExportOutputRenderer::beginHtmlOutput();
 			echo htmlspecialchars("-- No databases selected for export.\n");
@@ -228,7 +221,7 @@ if ($use_pgdump) {
 		goto pg_dumpall_export;
 	}
 
-	$selected_dbs = $selected_objects;
+	$selected_dbs = $filtering_enabled ? $selected_objects : [];
 
 	// Check if all non-template databases are selected
 	$databaseActions = new DatabaseActions($pg);
@@ -242,6 +235,10 @@ if ($use_pgdump) {
 		}
 		$all_dbs->moveNext();
 	}
+	if (empty($selected_dbs) && !$filtering_enabled) {
+		$selected_dbs = $all_db_list;
+	}
+
 	sort($selected_dbs);
 	sort($all_db_list);
 	$allDbsSelected = ($selected_dbs === $all_db_list && !empty($selected_dbs));
@@ -284,7 +281,7 @@ if ($use_pgdump && (($_REQUEST['subject'] ?? 'database') === 'server') && !empty
 	foreach ($selected_databases as $db_name) {
 		$pg->fieldClean($db_name);
 		$db_cmd = $base_cmd . ' ' . $misc->escapeShellArg($db_name);
-		$db_cmd = addPgDumpFormatOptions($db_cmd, $_REQUEST['what'] ?? 'structureanddata', $insert_format, isset($_REQUEST['drop_objects']));
+		$db_cmd = addPgDumpFormatOptions($db_cmd, $insert_format);
 		$db_commands[] = $db_cmd;
 		$db_names[] = $db_name;
 	}
@@ -371,6 +368,7 @@ if ($use_pgdump) {
 	// Schema/table handling
 	$f_schema = '';
 	$f_object = '';
+	$filtering_enabled = !isset($_REQUEST['export_all_objects']);
 
 	if (isset($_REQUEST['schema'])) {
 		$f_schema = $_REQUEST['schema'];
@@ -382,43 +380,48 @@ if ($use_pgdump) {
 		case 'database':
 			// Database export (optionally filtered to selected schemas)
 			$selected_schemas = isset($_REQUEST['objects']) ? array_values((array) $_REQUEST['objects']) : [];
-			if (empty($selected_schemas)) {
-				if ($output_method === 'show') {
-					ExportOutputRenderer::beginHtmlOutput();
-					echo htmlspecialchars("-- No schemas selected for export.\n");
-					ExportOutputRenderer::endHtmlOutput();
-				} else {
-					echo "-- No schemas selected for export.\n";
+			if ($filtering_enabled) {
+				if (empty($selected_schemas)) {
+					if ($output_method === 'show') {
+						ExportOutputRenderer::beginHtmlOutput();
+						echo htmlspecialchars("-- No schemas selected for export.\n");
+						ExportOutputRenderer::endHtmlOutput();
+					} else {
+						echo "-- No schemas selected for export.\n";
+					}
+					exit;
 				}
-				exit;
-			}
-			foreach ($selected_schemas as $schemaName) {
-				$pg->fieldClean($schemaName);
-				$cmd .= " -n " . $misc->escapeShellArg("\"{$schemaName}\"");
+				foreach ($selected_schemas as $schemaName) {
+					$pg->fieldClean($schemaName);
+					$cmd .= " -n " . $misc->escapeShellArg("\"{$schemaName}\"");
+				}
 			}
 			break;
 		case 'schema':
-			// Schema export (optionally filtered to selected tables)
+			// Schema export (optionally filtered to selected tables/views/sequences)
 			$selected_tables = isset($_REQUEST['objects']) ? array_values((array) $_REQUEST['objects']) : [];
-			if (!empty($selected_tables)) {
+			if ($filtering_enabled) {
+				if (empty($selected_tables)) {
+					if ($output_method === 'show') {
+						ExportOutputRenderer::beginHtmlOutput();
+						echo htmlspecialchars("-- No objects selected for export.\n");
+						ExportOutputRenderer::endHtmlOutput();
+					} else {
+						echo "-- No objects selected for export.\n";
+					}
+					exit;
+				}
 				foreach ($selected_tables as $tableName) {
 					$pg->fieldClean($tableName);
 					$cmd .= " -t " . $misc->escapeShellArg("\"{$f_schema}\".\"{$tableName}\"");
 				}
 			} else {
-				if ($output_method === 'show') {
-					ExportOutputRenderer::beginHtmlOutput();
-					echo htmlspecialchars("-- No tables selected for export.\n");
-					ExportOutputRenderer::endHtmlOutput();
-				} else {
-					echo "-- No tables selected for export.\n";
-				}
-				exit;
+				$cmd .= " -n " . $misc->escapeShellArg("\"{$f_schema}\"");
 			}
 			break;
 		case 'table':
 		case 'view':
-			// Table or view export
+			// Table or view export (currently unused)
 			$f_object = $_REQUEST[$_REQUEST['subject']];
 			$pg->fieldClean($f_object);
 			$cmd .= " -t " . $misc->escapeShellArg("\"{$f_schema}\".\"{$f_object}\"");
@@ -426,7 +429,7 @@ if ($use_pgdump) {
 	}
 
 	// Add format options based on request
-	$cmd = addPgDumpFormatOptions($cmd, $_REQUEST['what'] ?? 'structureanddata', $insert_format, isset($_REQUEST['drop_objects']));
+	$cmd = addPgDumpFormatOptions($cmd, $insert_format);
 
 	// Set database for single database export
 	if (isset($_REQUEST['database'])) {
@@ -542,29 +545,39 @@ function buildDumpCommandWithConnectionParams($exe_path, $server_info)
  * Add format and structure options to pg_dump command.
  * Appends flags for data-only, structure-only, INSERT format, and DROP IF EXISTS.
  */
-function addPgDumpFormatOptions($cmd, $what, $insert_format, $drop_objects = false)
+function addPgDumpFormatOptions($cmd, $insert_format)
 {
-	switch ($what) {
+	switch ($_REQUEST['what']) {
 		case 'dataonly':
 			$cmd .= ' -a';
 			if ($insert_format !== 'copy') {
 				$cmd .= ' --inserts';
+				if ($insert_format === 'multi') {
+					$cmd .= ' --rows-per-insert=1000';
+				}
 			}
 			break;
 		case 'structureonly':
 			$cmd .= ' -s';
-			if ($drop_objects) {
+			if (isset($_REQUEST['drop_objects'])) {
 				$cmd .= ' -c';
 			}
 			break;
+		default:
 		case 'structureanddata':
 			if ($insert_format !== 'copy') {
 				$cmd .= ' --inserts';
+				if ($insert_format === 'multi') {
+					$cmd .= ' --rows-per-insert=1000';
+				}
 			}
-			if ($drop_objects) {
+			if (isset($_REQUEST['drop_objects'])) {
 				$cmd .= ' -c';
 			}
 			break;
+	}
+	if (!isset($_REQUEST['include_comments'])) {
+		$cmd .= ' --no-comments';
 	}
 	return $cmd;
 }

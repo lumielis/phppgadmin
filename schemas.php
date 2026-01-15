@@ -3,7 +3,9 @@
 use PhpPgAdmin\Core\AppContainer;
 use PhpPgAdmin\Database\Actions\RoleActions;
 use PhpPgAdmin\Database\Actions\SchemaActions;
+use PhpPgAdmin\Database\Actions\SequenceActions;
 use PhpPgAdmin\Database\Actions\TableActions;
+use PhpPgAdmin\Database\Actions\ViewActions;
 use PhpPgAdmin\Gui\ExportFormRenderer;
 use PhpPgAdmin\Gui\ImportFormRenderer;
 
@@ -379,6 +381,9 @@ function doExport($msg = '')
 	$misc->printMsg($msg);
 
 	$tableActions = new TableActions($pg);
+	$viewActions = new ViewActions($pg);
+	$sequenceActions = new SequenceActions($pg);
+
 	$tableNames = [];
 	$tables = $tableActions->getTables(false);
 	while (!$tables->EOF) {
@@ -386,12 +391,29 @@ function doExport($msg = '')
 		$tables->moveNext();
 	}
 
+	$viewNames = [];
+	$views = $viewActions->getViews();
+	while ($views && !$views->EOF) {
+		$viewNames[] = $views->fields['relname'];
+		$views->moveNext();
+	}
+
+	$sequenceNames = [];
+	$sequences = $sequenceActions->getSequences(false);
+	while ($sequences && !$sequences->EOF) {
+		$sequenceNames[] = $sequences->fields['seqname'];
+		$sequences->moveNext();
+	}
+
 	// Use the unified ExportFormRenderer for the export form
 	$exportRenderer = new ExportFormRenderer();
 	$exportRenderer->renderExportForm('schema', [
-		'name' => 'tables',
-		'icon' => 'Table',
-		'objects' => $tableNames
+		'name' => 'objects',
+		'objects_by_type' => [
+			'tables' => $tableNames,
+			'sequences' => $sequenceNames,
+			'views' => $viewNames,
+		]
 	]);
 }
 

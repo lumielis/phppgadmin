@@ -7,7 +7,7 @@ use PhpPgAdmin\Database\Actions\RoleActions;
 /**
  * Dumper for PostgreSQL roles.
  */
-class RoleDumper extends AbstractDumper
+class RoleDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {

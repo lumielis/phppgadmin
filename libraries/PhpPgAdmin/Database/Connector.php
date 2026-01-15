@@ -7,6 +7,9 @@ namespace PhpPgAdmin\Database;
 use ADOConnection;
 use PhpPgAdmin\Core\AppContainer;
 
+/**
+ * Do we still need this class?
+ */
 class Connector
 {
 
@@ -34,6 +37,13 @@ class Connector
 		$this->conn = ADONewConnection('postgres9_enhanced');
 		$this->conn->setFetchMode($fetchMode);
 
+		$pghost = self::getHostPortString($host, $port, $sslmode);
+
+		$this->conn->connect($pghost, $user, $password, $database);
+	}
+
+	public static function getHostPortString($host, $port, $sslmode)
+	{
 		// Ignore host if null
 		if ($host === null || $host == '')
 			if ($port !== null && $port != '')
@@ -50,7 +60,7 @@ class Connector
 			$pghost .= ' requiressl=1';
 		}
 
-		$this->conn->connect($pghost, $user, $password, $database);
+		return $pghost;
 	}
 
 	/**

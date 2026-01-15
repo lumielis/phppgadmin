@@ -5,7 +5,7 @@ namespace PhpPgAdmin\Database\Dump;
 /**
  * Dumper for PostgreSQL views.
  */
-class ViewDumper extends AbstractDumper
+class ViewDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {

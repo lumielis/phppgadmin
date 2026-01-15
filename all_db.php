@@ -443,8 +443,11 @@ function doExport($msg = '')
 	$exportRenderer = new ExportFormRenderer();
 	$exportRenderer->renderExportForm('server', [
 		'name' => 'databases',
-		'icon' => 'Database',
-		'objects' => $databaseNames
+		//'icon' => 'Database',
+		//'objects' => $databaseNames,
+		'objects_by_type' => [
+			'databases' => $databaseNames,
+		],
 	]);
 }
 

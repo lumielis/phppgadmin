@@ -204,7 +204,7 @@ class TableRenderer extends AbstractContext
                                 <?= $lang['strselectall'] ?>
                             </a>
                         </td>
-                        <td>&nbsp;⮞&nbsp;</td>
+                        <td>&nbsp;<span class="psm">⮞</span>&nbsp;</td>
                         <td>
                             <select name="action">
                                 <?php if ($ma['default'] == null): ?>

@@ -7,7 +7,7 @@ use PhpPgAdmin\Database\Actions\SequenceActions;
 /**
  * Dumper for PostgreSQL sequences.
  */
-class SequenceDumper extends AbstractDumper
+class SequenceDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {
@@ -18,10 +18,12 @@ class SequenceDumper extends AbstractDumper
             return;
         }
 
+
         $sequenceActions = new SequenceActions($this->connection);
         $rs = $sequenceActions->getSequence($sequence);
 
         if ($rs && !$rs->EOF) {
+            $this->write("\n-- Sequence: \"{$schema}\".\"{$sequence}\"\n");
             $this->writeDrop('SEQUENCE', "{$schema}\".\"{$sequence}", $options);
 
             $ifNotExists = $this->getIfNotExists($options);

@@ -106,62 +106,113 @@ class ExportFormRenderer
             <!-- Object Selection for non-server exports -->
             <fieldset id="object_selection">
                 <legend>
+                    <!--
                     <?= sprintf(
                         $this->lang['strselectobjectstoexport'] ?? 'Select %s to export',
                         ucfirst($params['name'] ?? 'objects')
-                    ); ?>
+                    ) ?>
+                    -->
+                    <input type="checkbox" id="export_all_objects" name="export_all_objects" value="true" checked="checked" />
+                    <label for="export_all_objects"><?= $this->lang['strexportallobjects'] ?? 'Export all objects'; ?></label>
                 </legend>
+                <!--
                 <div class="mb-1">
-                    <!--
-                    <label><input type="checkbox" id="select_all_objects" onclick="toggleObjects(this.checked);"
-                            checked="checked" /> <?= $this->lang['strselectall'] ?></label>
-                -->
                     <a href="javascript:void(0);" onclick="toggleObjects(true)"><?= $this->lang['strselectall'] ?></a>
                     &nbsp;|&nbsp;
                     <a href="javascript:void(0);" onclick="toggleObjects(false)"><?= $this->lang['strunselectall'] ?></a>
                 </div>
-                <div class="flex-column flex-wrap object-selection-list">
-                    <?php
-                    foreach ($params['objects'] ?? [] as $objName) {
-                        ?>
-                        <div>
-                            <input type="checkbox" id="<?= html_esc($subject . '_' . $objName); ?>" name="objects[]"
-                                value="<?= html_esc($objName); ?>" checked="checked" />
-                            <label for="<?= html_esc($subject . '_' . $objName); ?>">
-                                <img src="<?= $this->misc->icon($params['icon'] ?? ''); ?>" class="icon">
-                                <?= html_esc($objName); ?>
-                            </label>
-                        </div>
-                        <?php
-                    }
+                -->
+                <?php
+                $objectGroups = $params['objects_by_type'] ?? [];
+                $groupLabels = [
+                    'databases' => $this->lang['strdatabases'] ?? 'Databases',
+                    'schemas' => $this->lang['strschemas'] ?? 'Schemas',
+                    'tables' => $this->lang['strtables'] ?? 'Tables',
+                    'views' => $this->lang['strviews'] ?? 'Views',
+                    'sequences' => $this->lang['strsequences'] ?? 'Sequences',
+                ];
+                $groupIcons = [
+                    'databases' => 'Database',
+                    'schemas' => 'Schema',
+                    'tables' => 'Table',
+                    'views' => 'View',
+                    'sequences' => 'Sequence'
+                ];
+                foreach (array_keys($objectGroups) as $groupKey) {
+                    $groupObjects = $objectGroups[$groupKey] ?? [];
+                    $count = is_array($groupObjects) ? count($groupObjects) : 0;
                     ?>
-                </div>
+                    <div class="object-selection-group" data-group="<?= html_esc($groupKey); ?>">
+                        <div class="my-1">
+                            <strong>
+                                <?= html_esc($groupLabels[$groupKey] ?? ucfirst($groupKey)); ?> (<?= $count; ?>)
+                            </strong>
+                            &nbsp;
+                            <a href="javascript:void(0);" onclick="toggleObjects(true, '<?= html_esc($groupKey); ?>')">
+                                <?= $this->lang['strselectall'] ?>
+                            </a>
+                            &nbsp;|&nbsp;
+                            <a href="javascript:void(0);" onclick="toggleObjects(false, '<?= html_esc($groupKey); ?>')">
+                                <?= $this->lang['strunselectall'] ?>
+                            </a>
+                        </div>
+                        <div class="flex-column flex-wrap object-selection-list">
+                            <?php
+                            foreach ($groupObjects as $objName) {
+                                $objId = $subject . '_' . $groupKey . '_' . $objName;
+                                ?>
+                                <div>
+                                    <input type="checkbox" id="<?= html_esc($objId); ?>" name="objects[]"
+                                        value="<?= html_esc($objName); ?>" data-group="<?= html_esc($groupKey); ?>" checked="checked" />
+                                    <label for="<?= html_esc($objId); ?>">
+                                        <img src="<?= $this->misc->icon($groupIcons[$groupKey] ?? ''); ?>" class="icon">
+                                        <?= html_esc($objName); ?>
+                                    </label>
+                                </div>
+                                <?php
+                            }
+                            ?>
+                        </div>
+                    </div>
+                    <?php
+                }
+                ?>
             </fieldset>
 
 
             <!-- Structure Export Options -->
             <fieldset id="structure_options">
                 <legend><?= $this->lang['strstructureoptions']; ?></legend>
-                <div>
-                    <input type="checkbox" id="drop_objects" name="drop_objects" value="true" />
-                    <label for="drop_objects"><?= $this->lang['stradddropstatements']; ?></label>
-                </div>
-                <div>
-                    <input type="checkbox" id="if_not_exists" name="if_not_exists" value="true" checked="checked" />
-                    <label for="if_not_exists"><?= $this->lang['struseifnotexists']; ?></label>
-                </div>
-                <div>
+                <?php if ($subject === 'schema'): ?>
+                    <div class="my-1 ms-1">
+                        <input type="checkbox" id="include_schema_objects" name="include_schema_objects" value="true"
+                            checked="checked" />
+                        <label for="include_schema_objects">
+                            <?= $this->lang['strincludeschemaobjects'] ?? 'Include schema objects (functions, types, etc.)'; ?>
+                        </label>
+                    </div>
+                <?php endif; ?>
+                <div class="my-1 ms-1">
                     <input type="checkbox" id="include_comments" name="include_comments" value="true" checked="checked" />
                     <label for="include_comments"><?= $this->lang['strincludeobjectcomments']; ?></label>
                 </div>
+                <div class="my-1 ms-1">
+                    <input type="checkbox" id="if_not_exists" name="if_not_exists" value="true" checked="checked" />
+                    <label for="if_not_exists"><?= $this->lang['struseifnotexists']; ?></label>
+                </div>
+                <div class="my-1 ms-1">
+                    <input type="checkbox" id="drop_objects" name="drop_objects" value="true" />
+                    <label for="drop_objects"><?= $this->lang['stradddropstatements']; ?>
+                    </label>
+                </div>
                 <?php if ($subject === 'server' || $subject === 'database'): ?>
-                    <div>
+                    <div class="my-1 ms-1">
                         <input type="checkbox" id="add_create_database" name="add_create_database" value="true" />
                         <label for="add_create_database"><?= $this->lang['stradddbcreation'] ?? 'Add database creation'; ?></label>
                     </div>
                 <?php endif; ?>
                 <?php if ($subject === 'schema' || $subject === 'database'): ?>
-                    <div>
+                    <div class="my-1 ms-1">
                         <input type="checkbox" id="add_create_schema" name="add_create_schema" value="true" />
                         <label for="add_create_schema"><?= $this->lang['straddschemacreation'] ?? 'Add schema creation'; ?></label>
                     </div>
@@ -181,7 +232,7 @@ class ExportFormRenderer
                 </div>
 
                 <!-- INSERT Format Options (only shown when SQL format is selected and data is included) -->
-                <div id="insert_format_options" class="mt-3 pt-1" style="display:none; border-top: 1px solid #ccc;">
+                <div id="insert_format_options" class="mt-2" style="display:none; border-top: 1px solid #ccc;">
                     <p><strong><?= $this->lang['strinsertformat_desc']; ?></strong></p>
                     <div style="margin-left: 20px;">
                         <div>
@@ -247,11 +298,21 @@ class ExportFormRenderer
 
         <script>
             {
-                // Toggle all object checkboxes in the selection fieldset
-                function toggleObjects(check) {
+                // Toggle object checkboxes in the selection fieldset (optionally by group)
+                function toggleObjects(check, group) {
                     const form = document.getElementById('export-form');
                     if (!form) return;
-                    const objectCheckboxes = form.querySelectorAll('input[name="objects[]"]');
+
+                    const exportAllObjects = document.getElementById('export_all_objects');
+                    if (exportAllObjects && exportAllObjects.checked) {
+                        return;
+                    }
+
+                    let selector = 'input[name="objects[]"]';
+                    if (group) {
+                        selector += `[data-group="${group}"]`;
+                    }
+                    const objectCheckboxes = form.querySelectorAll(selector);
                     objectCheckboxes.forEach(cb => {
                         cb.checked = !!check;
                         cb.dispatchEvent(new Event('change', { bubbles: true }));
@@ -272,6 +333,8 @@ class ExportFormRenderer
                 const objectSelection = document.getElementById('object_selection');
                 const exportRoles = document.getElementById('export_roles');
                 const exportTablespaces = document.getElementById('export_tablespaces');
+                const includeSchemaObjects = document.getElementById('include_schema_objects');
+                const exportAllObjects = document.getElementById('export_all_objects');
 
                 // Only setup if form elements exist on this page
                 if (whatRadios.length > 0 && structureOptions) {
@@ -326,6 +389,28 @@ class ExportFormRenderer
 
                         // Count selected databases for pg_dump smart logic
                         const objectCheckboxes = form.querySelectorAll('input[name="objects[]"]');
+
+                        // Handle "Export All Objects" checkbox
+                        if (exportAllObjects) {
+                            const exportAll = !!exportAllObjects.checked;
+                            const enabled = !exportAll;
+                            objectCheckboxes.forEach(cb => {
+                                if (!enabled) {
+                                    cb.checked = true;
+                                }
+                                cb.disabled = !enabled;
+                            });
+
+                            const toggleLinks = form.querySelectorAll('#object_selection a');
+                            toggleLinks.forEach(a => {
+                                if (enabled) {
+                                    a.classList.remove('disabled');
+                                } else {
+                                    a.classList.add('disabled');
+                                }
+                            });
+                        }
+
                         const checkedCount = Array.from(objectCheckboxes).filter(cb => cb.checked).length;
                         const totalCount = objectCheckboxes.length;
                         const allObjectsSelected = checkedCount === totalCount && totalCount > 0;
@@ -362,11 +447,11 @@ class ExportFormRenderer
                             }
                         }
 
-                        // Disable INSERT format options that pg_dump doesn't support
+                        // Disable INSERT format options that pg_dumpall doesn't support
                         if (insertMulti) {
-                            insertMulti.disabled = pgdumpSelected || pgdumpallSelected;
-                            // If multi-row is selected and pg_dump/pg_dumpall is enabled, switch to COPY
-                            if ((pgdumpSelected || pgdumpallSelected) && insertMulti.checked) {
+                            insertMulti.disabled = pgdumpallSelected;
+                            // If multi-row is selected and pg_dumpall is enabled, switch to COPY
+                            if (pgdumpallSelected && insertMulti.checked) {
                                 document.getElementById('insert_copy').checked = true;
                             }
                         }
@@ -384,6 +469,15 @@ class ExportFormRenderer
                             // If TRUNCATE is checked and pg_dump/pg_dumpall is enabled, uncheck it
                             if ((pgdumpSelected || pgdumpallSelected) && truncateTables.checked) {
                                 truncateTables.checked = false;
+                            }
+                        }
+
+                        if (includeSchemaObjects) {
+                            if (pgdumpSelected || pgdumpallSelected) {
+                                includeSchemaObjects.checked = true;
+                                includeSchemaObjects.disabled = true;
+                            } else {
+                                includeSchemaObjects.disabled = false;
                             }
                         }
 
@@ -439,6 +533,7 @@ class ExportFormRenderer
                     outputFormatRadios.forEach(radio => radio.addEventListener('change', updateOptions));
                     const objectCheckboxes = form.querySelectorAll('input[name="objects[]"]');
                     objectCheckboxes.forEach(cb => cb.addEventListener('change', updateOptions));
+                    if (exportAllObjects) exportAllObjects.addEventListener('change', updateOptions);
                     updateOptions(); // Initial state
                     updateWhatRadios(); // Set initial what radio state
                 }

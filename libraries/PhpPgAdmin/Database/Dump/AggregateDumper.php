@@ -7,7 +7,7 @@ use PhpPgAdmin\Database\Actions\AggregateActions;
 /**
  * Dumper for PostgreSQL aggregates.
  */
-class AggregateDumper extends AbstractDumper
+class AggregateDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {

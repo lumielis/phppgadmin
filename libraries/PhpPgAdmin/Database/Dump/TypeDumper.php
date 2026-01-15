@@ -7,7 +7,7 @@ use PhpPgAdmin\Database\Actions\TypeActions;
 /**
  * Dumper for PostgreSQL types (Base, Enum, Composite).
  */
-class TypeDumper extends AbstractDumper
+class TypeDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {
@@ -41,6 +41,7 @@ class TypeDumper extends AbstractDumper
                     // Other types (pseudo, etc.) might not be dumpable or needed
                     break;
             }
+            //$this->write("\n");
 
             $this->writePrivileges($typeName, 'type', $schema);
         }
@@ -66,7 +67,11 @@ class TypeDumper extends AbstractDumper
             $typeInfo = $typeActions->getType($typeName);
             if ($typeInfo && !$typeInfo->EOF && isset($typeInfo->fields['comment']) && $typeInfo->fields['comment'] !== null) {
                 $this->connection->clean($typeInfo->fields['comment']);
-                $this->write("COMMENT ON TYPE \"" . addslashes($schema) . "\".\"" . addslashes($typeName) . "\" IS '{$typeInfo->fields['comment']}';\\n");
+                $this->write(
+                    "COMMENT ON TYPE \"" . addslashes($schema) .
+                    "\".\"" . addslashes($typeName) .
+                    "\" IS '{$typeInfo->fields['comment']}';\n"
+                );
             }
         }
     }
@@ -96,7 +101,11 @@ class TypeDumper extends AbstractDumper
         $typeInfo = $typeActions->getType($typeName);
         if ($typeInfo && !$typeInfo->EOF && isset($typeInfo->fields['comment']) && $typeInfo->fields['comment'] !== null) {
             $this->connection->clean($typeInfo->fields['comment']);
-            $this->write("COMMENT ON TYPE \"" . addslashes($schema) . "\".\"" . addslashes($typeName) . "\" IS '{$typeInfo->fields['comment']}';\\n");
+            $this->write(
+                "COMMENT ON TYPE \"" . addslashes($schema) .
+                "\".\"" . addslashes($typeName) .
+                "\" IS '{$typeInfo->fields['comment']}';\n"
+            );
         }
     }
 
@@ -113,7 +122,7 @@ class TypeDumper extends AbstractDumper
         if ($fields['typalign'] != '') {
             $this->write(",\n    ALIGNMENT = " . $this->getAlignmentName($fields['typalign']));
         }
-        if ($fields['typstorage'] != '') {
+        if ($fields['typstorage'] ?? '' != '') {
             $this->write(",\n    STORAGE = " . $this->getStorageName($fields['typstorage']));
         }
 

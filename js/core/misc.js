@@ -594,6 +594,7 @@
 	//createDateAndTimePickers(document.documentElement);
 	window.createSqlEditor = createSqlEditor;
 	window.createSqlViewer = createSqlViewer;
+	window.createSqlEditors = createSqlEditors;
 
 	hljs.registerLanguage("pgsql", function (hljs) {
 		const base = hljs.getLanguage("pgsql");

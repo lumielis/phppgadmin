@@ -2,19 +2,16 @@
 
 namespace PhpPgAdmin\Database\Dump;
 
-use PhpPgAdmin\Database\Actions\AggregateActions;
-use PhpPgAdmin\Database\Actions\OperatorActions;
-use PhpPgAdmin\Database\Actions\SequenceActions;
-use PhpPgAdmin\Database\Actions\SqlFunctionActions;
-use PhpPgAdmin\Database\Actions\TableActions;
 use PhpPgAdmin\Database\Actions\TypeActions;
-use PhpPgAdmin\Database\Actions\ViewActions;
 
 /**
  * Orchestrator dumper for a PostgreSQL schema.
  */
-class SchemaDumper extends AbstractDumper
+class SchemaDumper extends ExportDumper
 {
+    private $selectedObjects = [];
+    private $hasObjectSelection = false;
+
     public function dump($subject, array $params, array $options = [])
     {
         $schema = $params['schema'] ?? $this->connection->_schema;
@@ -22,15 +19,15 @@ class SchemaDumper extends AbstractDumper
             return;
         }
 
+        // Get list of selected objects (tables/views/sequences)
+        $this->selectedObjects = $options['objects'] ?? [];
+        $this->hasObjectSelection = isset($options['objects']);
+        $this->selectedObjects = array_combine($this->selectedObjects, $this->selectedObjects);
+        $includeSchemaObjects = $options['include_schema_objects'] ?? true;
+
         // Save and set schema context for Actions that depend on it
         $oldSchema = $this->connection->_schema;
         $this->connection->_schema = $schema;
-
-        // Also save and set database context if provided
-        $oldDatabase = $this->connection->conn->database;
-        if (!empty($params['database']) && $params['database'] !== $oldDatabase) {
-            $this->connection->conn->database = $params['database'];
-        }
 
         $c_schema = $schema;
         $this->connection->clean($c_schema);
@@ -48,7 +45,9 @@ class SchemaDumper extends AbstractDumper
         $this->write("SET search_path = \"" . addslashes($c_schema) . "\", pg_catalog;\n\n");
 
         // 1. Types & Domains
-        $this->dumpTypes($schema, $options);
+        if ($includeSchemaObjects) {
+            $this->dumpTypes($schema, $options);
+        }
 
         // 2. Sequences
         $this->dumpSequences($schema, $options);
@@ -60,51 +59,196 @@ class SchemaDumper extends AbstractDumper
         $this->dumpViews($schema, $options);
 
         // 5. Functions
-        $this->dumpFunctions($schema, $options);
+        if ($includeSchemaObjects) {
+            $this->dumpFunctions($schema, $options);
+        }
 
         // 6. Aggregates, Operators, etc.
-        $this->dumpOtherObjects($schema, $options);
+        if ($includeSchemaObjects) {
+            $this->dumpOtherObjects($schema, $options);
+        }
 
         $this->writePrivileges($schema, 'schema');
 
-        // Restore original contexts
+        // Restore original schema context
         $this->connection->_schema = $oldSchema;
-        $this->connection->conn->database = $oldDatabase;
     }
 
     protected function dumpTypes($schema, $options)
     {
-        $typeActions = new TypeActions($this->connection);
-        $types = $typeActions->getTypes(false, false, true); // include domains
+        $this->connection->clean($schema);
+
+        // 1. Get types
+        $types = $this->connection->selectSet(
+            "SELECT t.oid, t.typname, t.typtype, t.typnamespace, t.typbasetype
+                FROM pg_type t
+                JOIN pg_namespace n ON n.oid = t.typnamespace
+                WHERE n.nspname = '{$schema}'
+                AND t.typtype IN ('b','c','d','e')
+                AND t.typelem = 0 -- Exclude array types
+                AND t.typrelid = 0 -- Exclude types that are tied to a table
+                ORDER BY t.oid"
+        );
+
+        // 2. Get dependencies
+        $deps = $this->connection->selectSet(
+            "SELECT d.objid AS type_oid, d.refobjid AS depends_on_oid
+                FROM pg_depend d
+                JOIN pg_type t ON t.oid = d.objid
+                WHERE d.classid = 'pg_type'::regclass
+                AND d.refclassid = 'pg_type'::regclass
+                AND d.deptype IN ('n','i')"
+        );
+
+        // 3. Build arrays
+        $typeList = [];
+        while ($types && !$types->EOF) {
+            $typeList[$types->fields['oid']] = $types->fields;
+            $types->moveNext();
+        }
+
+        $depList = [];
+        while ($deps && !$deps->EOF) {
+            $depList[] = $deps->fields;
+            $deps->moveNext();
+        }
+
+        // 4. Topologically sort
+        $sortedOids = $this->sortTypesTopologically($typeList, $depList);
+
+        // 5. Dumper
         $typeDumper = $this->createSubDumper('type');
         $domainDumper = $this->createSubDumper('domain');
 
-        while ($types && !$types->EOF) {
-            //var_dump($types->fields);
-            if ($types->fields['typtype'] === 'd') {
-                $domainDumper->dump('domain', ['domain' => $types->fields['typname'], 'schema' => $schema], $options);
+        foreach ($sortedOids as $oid) {
+            $t = $typeList[$oid];
+
+            if ($t['typtype'] === 'd') {
+                $domainDumper->dump('domain', [
+                    'schema' => $schema,
+                    'domain' => $t['typname'],
+                ], $options);
             } else {
-                $typeDumper->dump('type', ['type' => $types->fields['typname'], 'schema' => $schema], $options);
+                $typeDumper->dump('type', [
+                    'schema' => $schema,
+                    'type' => $t['typname'],
+                ], $options);
             }
-            $types->moveNext();
+        }
+    }
+
+    protected function sortTypesTopologically(array $types, array $deps)
+    {
+        // Build graph
+        $graph = [];
+        $incoming = [];
+
+        foreach ($types as $t) {
+            $oid = $t['oid'];
+            $graph[$oid] = [];
+            $incoming[$oid] = 0;
+        }
+
+        foreach ($deps as $d) {
+            $from = $d['type_oid'];
+            $to = $d['depends_on_oid'];
+
+            if (isset($graph[$from]) && isset($graph[$to])) {
+                $graph[$from][] = $to;
+                $incoming[$to]++;
+            }
+        }
+
+        // Nodes without incoming edges
+        $queue = [];
+        foreach ($incoming as $oid => $count) {
+            if ($count === 0) {
+                $queue[] = $oid;
+            }
+        }
+
+        $sorted = [];
+
+        while (!empty($queue)) {
+            $oid = array_shift($queue);
+            $sorted[] = $oid;
+
+            foreach ($graph[$oid] as $dep) {
+                $incoming[$dep]--;
+                if ($incoming[$dep] === 0) {
+                    $queue[] = $dep;
+                }
+            }
+        }
+
+        return $sorted;
+    }
+
+    protected function dumpRelkindObjects($schema, $options, $relkind, $typeName)
+    {
+        $c_schema = $schema;
+        $this->connection->clean($c_schema);
+
+        $sql = "SELECT c.relname
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind = '{$relkind}'
+                AND n.nspname = '{$c_schema}'
+                ORDER BY c.relname";
+
+        $result = $this->connection->selectSet($sql);
+        $dumper = $this->createSubDumper($typeName);
+
+        while ($result && !$result->EOF) {
+            $name = $result->fields['relname'];
+
+            if (!$this->hasObjectSelection || isset($this->selectedObjects[$name])) {
+                $dumper->dump($typeName, [
+                    $typeName => $name,
+                    'schema' => $schema
+                ], $options);
+            }
+
+            $result->moveNext();
         }
     }
 
     protected function dumpSequences($schema, $options)
     {
+        $this->dumpRelkindObjects($schema, $options, 'S', 'sequence');
+    }
+
+    protected function dumpTables($schema, $options)
+    {
+        $this->dumpRelkindObjects($schema, $options, 'r', 'table');
+    }
+
+    protected function dumpViews($schema, $options)
+    {
+        $this->dumpRelkindObjects($schema, $options, 'v', 'view');
+    }
+
+    /*
+    protected function dumpSequences($schema, $options)
+    {
         $c_schema = $schema;
         $this->connection->clean($c_schema);
 
-        $sql = "SELECT sequence_name AS seqname
-                FROM information_schema.sequences
-                WHERE sequence_schema = '{$c_schema}'
-                ORDER BY sequence_name";
+        $sql = "SELECT c.relname AS seqname
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind = 'S'
+                AND n.nspname = '{$c_schema}'
+                ORDER BY c.relname";
 
         $sequences = $this->connection->selectSet($sql);
         $dumper = $this->createSubDumper('sequence');
 
         while ($sequences && !$sequences->EOF) {
-            $dumper->dump('sequence', ['sequence' => $sequences->fields['seqname'], 'schema' => $schema], $options);
+            $seqName = $sequences->fields['seqname'];
+            if (!$this->hasObjectSelection || isset($this->selectedObjects[$seqName])) {
+                $dumper->dump('sequence', ['sequence' => $seqName, 'schema' => $schema], $options);
+            }
             $sequences->moveNext();
         }
     }
@@ -124,20 +268,11 @@ class SchemaDumper extends AbstractDumper
         $tables = $this->connection->selectSet($sql);
         $dumper = $this->createSubDumper('table');
 
-        // Get list of selected tables (if any)
-        $selectedTables = !empty($options['objects']) ? $options['objects'] : [];
-        $selectedTables = array_combine($selectedTables, $selectedTables);
-
         while ($tables && !$tables->EOF) {
-
-            if (!empty($selectedTables)) {
-                if (!isset($selectedTables[$tables->fields['relname']])) {
-                    $tables->moveNext();
-                    continue;
-                }
+            $tableName = $tables->fields['relname'];
+            if (!$this->hasObjectSelection || isset($this->selectedObjects[$tableName])) {
+                $dumper->dump('table', ['table' => $tableName, 'schema' => $schema], $options);
             }
-
-            $dumper->dump('table', ['table' => $tables->fields['relname'], 'schema' => $schema], $options);
             $tables->moveNext();
         }
     }
@@ -158,10 +293,14 @@ class SchemaDumper extends AbstractDumper
         $dumper = $this->createSubDumper('view');
 
         while ($views && !$views->EOF) {
-            $dumper->dump('view', ['view' => $views->fields['relname'], 'schema' => $schema], $options);
+            $viewName = $views->fields['relname'];
+            if (!$this->hasObjectSelection || isset($this->selectedObjects[$viewName])) {
+                $dumper->dump('view', ['view' => $viewName, 'schema' => $schema], $options);
+            }
             $views->moveNext();
         }
     }
+    */
 
     protected function dumpFunctions($schema, $options)
     {

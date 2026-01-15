@@ -72,7 +72,10 @@ async function startStreamUpload() {
 		"opt_rights",
 		"opt_defer_self",
 		"opt_allow_drops",
+		"opt_stop_on_error",
 		"use_header",
+		"include_schema_objects",
+		"export_all_objects",
 	];
 	const opts = {};
 	for (const n of optNames) {
@@ -91,15 +94,6 @@ async function startStreamUpload() {
 			if (inp.checked) opts.allowed_nulls.push(inp.value);
 		});
 		opts.bytea_encoding = importForm.bytea_encoding?.value || "hex";
-	}
-
-	// Error handling mode
-	const errorModeInput = document.querySelector(
-		"input[name='opt_error_mode']:checked"
-	);
-	const errorMode = errorModeInput ? errorModeInput.value : "abort";
-	if (errorMode === "abort") {
-		opts.opt_stop_on_error = 1;
 	}
 
 	console.log("Import options:", opts, `Compress chunks: ${compressChunks}`);

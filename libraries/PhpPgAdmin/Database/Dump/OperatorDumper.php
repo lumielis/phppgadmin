@@ -8,7 +8,7 @@ use PhpPgAdmin\Database\Actions\OperatorActions;
 /**
  * Dumper for PostgreSQL operators.
  */
-class OperatorDumper extends AbstractDumper
+class OperatorDumper extends ExportDumper
 {
     public function dump($subject, array $params, array $options = [])
     {

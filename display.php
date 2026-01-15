@@ -797,12 +797,7 @@ function doDownloadBytea()
 			exit;
 		}
 		echo $chunk;
-		if (function_exists('flush')) {
-			flush();
-		}
-		if (function_exists('ob_flush')) {
-			ob_flush();
-		}
+		flush();
 	}
 
 	exit;
