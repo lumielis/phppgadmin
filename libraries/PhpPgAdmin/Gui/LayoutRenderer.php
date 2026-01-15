@@ -494,7 +494,9 @@ EOT;
 		}
 
 		$out = '';
-		$class = "field $type";
+		$class = "field";
+		if (!empty($type))
+			$class .= " {$type}";
 
 		switch ($type) {
 			case 'int2':
@@ -619,8 +621,9 @@ EOT;
 		if (isset($params['align']))
 			$align = $params['align'];
 
-		if (!isset($tag) && (isset($class) || isset($align)))
-			$tag = 'div';
+		if (!isset($tag)) {
+			$tag = $params['tag'] ?? (isset($align) ? 'div' : 'span');
+		}
 
 		if (isset($tag)) {
 			$attr = isset($attr) ? " $attr" : '';

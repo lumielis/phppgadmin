@@ -63,13 +63,12 @@ if (!$res->EOF) {
 			if (isset($keyspos[$n])) {
 				$field_name = htmlspecialchars($keyspos[$n]);
 				echo "<td><a href=\"javascript:void(0)\" class=\"fkval\" name=\"{$field_name}\">",
-				$misc->printVal($v, $finfo->type, ['clip' => 'collapsed']),
-				"</a></td>";
-			}
-			else {
+					$misc->printVal($v, $finfo->type, ['clip' => 'collapsed']),
+					"</a></td>";
+			} else {
 				echo "<td><a href=\"javascript:void(0)\">",
-				$misc->printVal($v, $finfo->type, ['clip' => 'collapsed']),
-				"</a></td>";
+					$misc->printVal($v, $finfo->type, ['clip' => 'collapsed']),
+					"</a></td>";
 			}
 		}
 		echo "</tr>\n";
@@ -88,6 +87,6 @@ $hasNext = $res->recordCount() == 13;
 
 echo "<div class=\"ac-page-nav\">\n";
 $class = "fkprev " . ($hasPrev ? "" : " disabled");
-echo "<a href=\"#\" class=\"$class\" id=\"fkprev-$context\">⮜ Prev. Page</a>";
+echo "<a href=\"#\" class=\"$class\" id=\"fkprev-$context\"><span class=\"psm\">⮜</span> Prev. Page</a>";
 $class = "fknext " . ($hasNext ? "" : " disabled");
-echo "<a href=\"#\" class=\"$class\" id=\"fknext-$context\">Next Page ⮞</a>";
+echo "<a href=\"#\" class=\"$class\" id=\"fknext-$context\">Next Page <span class=\"psm\">⮞</span></a>";
