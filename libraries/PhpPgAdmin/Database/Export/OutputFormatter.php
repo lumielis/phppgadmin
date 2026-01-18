@@ -135,6 +135,35 @@ abstract class OutputFormatter extends AbstractContext
      *
      * @param \ADORecordSet $recordset ADORecordSet with data rows
      * @param array $metadata Optional metadata (table name, columns, types, etc.)
+     * @deprecated Use CursorReader instead
      */
     abstract public function format($recordset, $metadata = []);
+
+    /**
+     * Write header information before data rows.
+     *
+     * @param array $fields Metadata about fields (types, names, etc.)
+     * @param array $metadata Optional additional metadata provided by caller
+     */
+    public function writeHeader($fields, $metadata = [])
+    {
+        // Default implementation does nothing.
+        // Subclasses may override to provide specific header output.
+    }
+
+    /**
+     * Write a single row of data.
+     *
+     * @param array $row Associative array of column => value
+     */
+    abstract public function writeRow($row);
+
+    /**
+     * Write footer information after data rows.
+     */
+    public function writeFooter()
+    {
+        // Default implementation does nothing.
+        // Subclasses may override to provide specific footer output.
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace PhpPgAdmin\Database\Cursor;
 
+use PhpPgAdmin\Database\Export\OutputFormatter;
 use PhpPgAdmin\Database\Postgres;
 
 /**
@@ -103,10 +104,10 @@ class CursorReader
         $this->sql = trim($sql);
         $this->tableName = $tableName;
         $this->schemaName = $schemaName ?? $connection->_schema;
-        
+
         // Get native pg connection resource from ADODB
         $this->pgResource = $connection->conn->_connectionID;
-        
+
         // Generate unique cursor name
         $this->cursorName = 'cursor_' . uniqid() . '_' . mt_rand(1000, 9999);
 
@@ -236,7 +237,7 @@ class CursorReader
                 'CLOSE %s',
                 pg_escape_identifier($this->pgResource, $this->cursorName)
             );
-            
+
             $result = pg_query($this->pgResource, $closeSql);
             if (!$result) {
                 // Log error but continue to commit
@@ -270,12 +271,12 @@ class CursorReader
      * Adaptive chunk sizing works because CursorReader controls the iteration loop.
      * Memory is measured between chunks to adjust chunk size dynamically.
      * 
-     * @param callable $callback function(array $row, int $rowNumber, array $fields): void
-     * @param callable|null $onChunkComplete Optional callback after each chunk: function(int $chunkNum, int $rowsInChunk, int $memUsed, int $newChunkSize): void
+     * @param callable $processRow function(array $row, int $rowNumber, array $fields): void
+     * @param ?callable $processHeader function(array $fields): void
      * @return int Total rows processed
      * @throws \RuntimeException On error
      */
-    public function eachRow(callable $callback, ?callable $onChunkComplete = null): int
+    public function eachRow(callable $processRow, ?callable $processHeader = null, $metadata = null): int
     {
         if (!$this->isOpen) {
             $this->open();
@@ -288,13 +289,19 @@ class CursorReader
 
             while (($result = $this->fetchChunk()) !== false) {
                 $chunkStartRow = $rowNumber;
-                
+
+                if ($rowNumber === 0 && $processHeader !== null) {
+                    // First chunk, send header metadata
+                    $processHeader($this->fields, $metadata);
+                }
+
                 // Process each row as we fetch it (no accumulation)
                 while ($row = pg_fetch_row($result)) {
-                    $callback($row, ++$rowNumber, $this->fields);
+                    $rowNumber++;
+                    $processRow($row, $this->fields);
                     $this->totalRows++;
                     $rowsInChunk++;
-                    
+
                     // Safety check every 100 rows
                     /*
                     if ($rowNumber % 100 === 0) {
@@ -309,7 +316,7 @@ class CursorReader
                 // Adaptive chunk sizing for queries
                 $memUsed = 0;
                 $oldChunkSize = $this->chunkSize;
-                
+
                 if ($this->adaptiveChunking && $this->chunkNumber >= 1) {
                     $memAfter = memory_get_usage(true);
                     $memUsed = $memAfter - $memBefore;
@@ -318,6 +325,7 @@ class CursorReader
                 }
 
                 // Notify callback about chunk completion (for monitoring)
+                /*
                 if ($onChunkComplete !== null) {
                     $onChunkComplete(
                         $this->chunkNumber,
@@ -326,8 +334,73 @@ class CursorReader
                         $this->chunkSize
                     );
                 }
-                
+                */
+
                 $rowsInChunk = 0;
+            }
+
+            return $rowNumber;
+        } finally {
+            $this->close();
+        }
+    }
+
+    /**
+     * Iterator pattern: Process all rows via OutputFormatter
+     * 
+     * Adaptive chunk sizing works because CursorReader controls the iteration loop.
+     * Memory is measured between chunks to adjust chunk size dynamically.
+     * 
+     * @param OutputFormatter $outputFormatter Output formatter to write rows to
+     * @param array $metadata Optional metadata for header
+     * @return int Total rows processed
+     * @throws \RuntimeException On error
+     */
+    public function processRows(OutputFormatter $outputFormatter, $metadata = []): int
+    {
+        if (!$this->isOpen) {
+            $this->open();
+        }
+
+        try {
+            $rowNumber = 0;
+            $memBefore = memory_get_usage(true);
+
+            while (($result = $this->fetchChunk()) !== false) {
+
+                if ($rowNumber === 0) {
+                    // First chunk, send header metadata
+                    $outputFormatter->writeHeader($this->fields, $metadata);
+                }
+
+                // Process each row as we fetch it (no accumulation)
+                while ($row = pg_fetch_row($result)) {
+                    $rowNumber++;
+                    $this->totalRows++;
+                    $outputFormatter->writeRow($row);
+
+                    // Safety check every 100 rows
+                    /*
+                    if ($rowNumber % 100 === 0) {
+                        $this->checkMemoryLimit();
+                    }
+                    */
+                }
+
+                // Free result immediately after processing
+                pg_free_result($result);
+
+                // Adaptive chunk sizing for queries
+                if ($this->adaptiveChunking && $this->chunkNumber >= 1) {
+                    $memAfter = memory_get_usage(true);
+                    $memUsed = $memAfter - $memBefore;
+                    $this->adjustChunkSize($memUsed);
+                    $memBefore = $memAfter;
+                }
+            }
+
+            if ($rowNumber > 0) {
+                $outputFormatter->writeFooter();
             }
 
             return $rowNumber;
@@ -449,7 +522,13 @@ class CursorReader
                 $this->tableName,
                 $this->schemaName
             );
-            
+
+            error_log(sprintf(
+                'Calculated chunk size: %d (estimated: %.2f MB)',
+                $result['chunk_size'],
+                $result['chunk_size'] * $result['max_row_bytes'] / 1024 / 1024
+            ));
+
             return $result['chunk_size'];
         } catch (\Exception $e) {
             error_log('Failed to calculate chunk size: ' . $e->getMessage());

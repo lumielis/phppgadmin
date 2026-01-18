@@ -29,7 +29,7 @@ class TableDumper extends ExportDumper
             return;
         }
 
-        $this->tableQuoted = $this->connection->quoteIdentifier($table);        
+        $this->tableQuoted = $this->connection->quoteIdentifier($table);
         $this->schemaQuoted = $this->connection->quoteIdentifier($schema);
 
         $this->write("\n-- Table: \"{$schema}\".\"{$table}\"\n\n");
@@ -53,27 +53,9 @@ class TableDumper extends ExportDumper
         }
     }
 
-    private const INSERT_COPY = 1;
-    private const INSERT_MULTI = 2;
-    private const INSERT_SINGLE = 3;
-
     protected function dumpData($table, $schema, $options)
     {
         $this->write("\n-- Data for table \"{$schema}\".\"{$table}\"\n");
-
-        switch ($options['insert_format'] ?? 'copy') {
-            default:
-            case 'copy':
-                $insertFormat = self::INSERT_COPY;
-                break;
-            case 'single':
-                $insertFormat = self::INSERT_SINGLE;
-                break;
-            case 'multi':
-                $insertFormat = self::INSERT_MULTI;
-                break;
-        }
-        //$oids = !empty($options['oids']);
 
         try {
             // Build SQL query for table export
@@ -91,198 +73,23 @@ class TableDumper extends ExportDumper
             // Open cursor (begins transaction)
             $reader->open();
 
-            // Prepare for SQL formatting
-            $tableName = "{$this->schemaQuoted}.{$this->tableQuoted}";
-            $fields = null;
-            $totalRows = 0;
-            $isFirstRow = true;
-            $columnNames = null;
-            $escapeModes = null;
-            $insertBegin = null;
-            $rowsInBatch = 0;
-            $batchSize = 1000;
-
-            // Stream rows without accumulation using eachRow()
-            $reader->eachRow(function($row, $rowNumber, $fieldMetadata) use (
-                $insertFormat,
-                $tableName,
-                &$fields,
-                &$columnNames,
-                &$escapeModes,
-                &$isFirstRow,
-                &$insertBegin,
-                &$rowsInBatch,
-                $batchSize
-            ) {
-                // Initialize on first row
-                if ($fields === null) {
-                    $fields = $fieldMetadata;
-                    $columnNames = array_map(function($field) {
-                        return $this->connection->escapeString(
-                            $field['name']
-                        );
-                    }, $fields);
-                    $escapeModes = $this->determineEscapeModes($fields);
-                }
-
-                // Write headers on first row
-                if ($isFirstRow) {
-                    if ($insertFormat === self::INSERT_COPY) {
-                        $line = "COPY {$tableName} (" . implode(', ', $columnNames) . ") FROM stdin;\n";
-                        $this->write($line);
-                    } else {
-                        $insertBegin = "INSERT INTO {$tableName} (" . implode(', ', $columnNames) . ") VALUES";
-                        if ($insertFormat === self::INSERT_MULTI) {
-                            $this->write("$insertBegin\n");
-                        }
-                    }
-                    $isFirstRow = false;
-                }
-
-                // Write row data
-                if ($insertFormat === self::INSERT_COPY) {
-                    $this->writeCopyRow($row, $escapeModes);
-                } elseif ($insertFormat === self::INSERT_MULTI) {
-                    // Break into batches
-                    if ($rowsInBatch >= $batchSize) {
-                        $this->write(";\n\n$insertBegin\n");
-                        $rowsInBatch = 0;
-                    } elseif ($rowsInBatch > 0) {
-                        $this->write(",\n");
-                    }
-                    $this->writeInsertValues($row, $escapeModes);
-                    $rowsInBatch++;
-                } else {
-                    // Single-row INSERT
-                    $this->write($insertBegin . " ");
-                    $this->writeInsertValues($row, $escapeModes);
-                    $this->write(";\n");
-                }
-            });
+            // Send data to SQL formatter for output
+            $sqlFormatter = new SqlFormatter();
+            $sqlFormatter->setOutputStream($this->outputStream);
+            $metadata = [
+                'table' => "{$this->schemaQuoted}.{$this->tableQuoted}",
+                'batch_size' => $options['batch_size'] ?? 1000,
+                'insert_format' => $options['insert_format'] ?? 'copy',
+            ];
+            $reader->processRows($sqlFormatter, $metadata);
 
             // Close cursor (commits transaction)
             $reader->close();
 
-            // Write terminators
-            if ($fields !== null) {
-                if ($insertFormat === self::INSERT_COPY) {
-                    $this->write("\\.\n\n");
-                } elseif ($insertFormat === self::INSERT_MULTI) {
-                    $this->write(";\n\n");
-                }
-            }
-
         } catch (\Exception $e) {
             error_log('Error dumping table data: ' . $e->getMessage());
-            $this->write("-- Error exporting data: " . $e->getMessage() . "\n");
+            $this->write("-- Error dumping data: " . $e->getMessage() . "\n");
         }
-    }
-
-    /**
-     * Determine escape modes for each field based on type
-     * 
-     * @param array $fields Field metadata
-     * @return array Escape modes (0=none, 1=string, 2=bytea)
-     */
-    protected function determineEscapeModes($fields)
-    {
-        $escapeModes = [];
-        
-        foreach ($fields as $i => $field) {
-            $type = strtolower($field['type'] ?? '');
-
-            // Numeric types - no escaping
-            if (in_array($type, [
-                'int2', 'int4', 'int8', 'integer', 'bigint', 'smallint',
-                'float4', 'float8', 'real', 'double precision',
-                'numeric', 'decimal'
-            ])) {
-                $escapeModes[$i] = 0;
-            }
-            // Boolean - no escaping
-            elseif (in_array($type, ['bool', 'boolean'])) {
-                $escapeModes[$i] = 0;
-            }
-            // Bytea - special escaping
-            elseif ($type === 'bytea') {
-                $escapeModes[$i] = 2;
-            }
-            // Everything else - string escaping
-            else {
-                $escapeModes[$i] = 1;
-            }
-        }
-
-        return $escapeModes;
-    }
-
-    /**
-     * Write a row in COPY format
-     * 
-     * @param array $row Numeric array of values
-     * @param array $escapeModes Escape modes for each column
-     */
-    protected function writeCopyRow($row, $escapeModes)
-    {
-        $line = '';
-        $first = true;
-
-        foreach ($row as $i => $v) {
-            if (!$first) {
-                $line .= "\t";
-            }
-            $first = false;
-
-            if ($v === null) {
-                $line .= '\\N';
-            } else {
-                if ($escapeModes[$i] === 2) {
-                    // Bytea - octal escaping for COPY
-                    $line .= bytea_to_octal($v);
-                } else {
-                    // COPY escaping: backslash and special chars
-                    $v = addcslashes($v, "\0\\\n\r\t");
-                    $line .= $v;
-                }
-            }
-        }
-
-        $this->write($line . "\n");
-    }
-
-    /**
-     * Write INSERT VALUES clause
-     * 
-     * @param array $row Numeric array of values
-     * @param array $escapeModes Escape modes for each column
-     */
-    protected function writeInsertValues($row, $escapeModes)
-    {
-        $values = "(";
-        $first = true;
-
-        foreach ($row as $i => $v) {
-            if (!$first) {
-                $values .= ",";
-            }
-            $first = false;
-
-            if ($v === null) {
-                $values .= "NULL";
-            } elseif ($escapeModes[$i] === 1) {
-                // String escaping
-                $values .= $this->connection->conn->qstr($v);
-            } elseif ($escapeModes[$i] === 2) {
-                // Bytea escaping
-                $values .= "'\\x" . bin2hex($v) . "'";
-            } else {
-                // No escaping (numeric/boolean)
-                $values .= $v;
-            }
-        }
-
-        $values .= ")";
-        $this->write($values);
     }
 
     /**
