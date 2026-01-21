@@ -231,7 +231,7 @@
 	};
 
 	/**
-	 * Format: [+-]0001-12-11 19:35:00[+02][ BC]
+	 * Format: [+-]0001-12-11 19:35:00[.123456][+02][ BC]
 	 * @param {HTMLElement} element
 	 */
 	window.createDateTimePicker = function (element) {
@@ -248,9 +248,10 @@
 				// Save original string for later reconstruction
 				element.dataset.date = datestr;
 
-				// Strip sign from year, timezone, and BC/AD suffix
+				// Strip sign from year, microseconds, timezone, and BC/AD suffix
 				const clean = datestr
 					.replace(/^([-+])(\d{4})/, "$2") // remove leading +/-
+					.replace(/\.\d+/, "") // remove microseconds
 					.replace(/([+-]\d{2}:?\d{2}|Z)?\s?(BC|AD)?$/i, ""); // remove tz + era
 
 				return flatpickr.parseDate(clean.trim(), format) ?? new Date();
@@ -268,6 +269,12 @@
 					datestr = prefixMatch[0] + datestr;
 				}
 
+				// Reattach microseconds if present
+				const microsMatch = prevDateStr.match(/\.\d+/);
+				if (microsMatch) {
+					datestr += microsMatch[0];
+				}
+
 				// Reattach timezone and/or BC/AD suffix if present
 				const match = prevDateStr.match(
 					/([+-]\d{2}(:?\d{2})?|Z)?(\s?(BC|AD))?$/,
@@ -275,8 +282,8 @@
 				if (match && match[1]) {
 					datestr += match[1];
 				}
-				if (match && match[2]) {
-					datestr += match[1];
+				if (match && match[3]) {
+					datestr += match[3];
 				}
 
 				return datestr;

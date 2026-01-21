@@ -416,6 +416,12 @@
 		handleOutsideClick(e) {
 			if (!this.currentPopup) return;
 
+			// Check if click is inside flatpickr calendar
+			const flatpickrCalendar = e.target.closest(".flatpickr-calendar");
+			if (flatpickrCalendar) {
+				return; // Ignore clicks inside flatpickr
+			}
+
 			// Check if click is outside popup
 			if (!this.currentPopup.contains(e.target)) {
 				this.saveAndClose();
