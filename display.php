@@ -179,36 +179,7 @@ function doEditRow($confirm, $msg = '')
 		} else
 			$fksprops = false;
 
-		$function_def = <<<EOT
-Date/Time
-CURRENT_DATE, CURRENT_TIME, NOW (), DATE_TRUNC (value), AGE (value), TO_CHAR (value), TO_DATE (value), INTERVAL
-Strings/Text
-LENGTH (value), CHAR_LENGTH (value), LOWER (value), UPPER (value), TRIM (value), LTRIM (value), RTRIM (value), MD5 (value), ENCODE (value,'base64'), ENCODE (value,'escape'), ENCODE (value,'hex'), DECODE (value,'base64'), DECODE (value,'escape'), DECODE (value,'hex')
-Math
-ABS (value), CEIL (value), FLOOR (value), ROUND (value), EXP (value), LOG (value), LOG10 (value), POWER (value), SQRT (value), PI (value), SIN (value), COS (value), TAN (value)
-UUID
-gen_random_uuid (), uuid_generate_v4 ()
-Network
-inet, cidr, host (value), hostmask (value), network (value), masklen (value)
-System/Info
-current_user, session_user, version (), database ()
-EOT;
-		$functions_by_category = [];
-		$all_functions = [];
-		$category = null;
-		foreach (explode("\n", $function_def) as $line) {
-			if (!isset($category)) {
-				$category = $line;
-				continue;
-			}
-			$functions_subset = explode(', ', $line);
-			$functions_by_category[$category] = $functions_subset;
-			$all_functions = array_merge_recursive($all_functions, $functions_subset);
-			$category = null;
-		}
-		// make function searchable by key
-		$all_functions = array_combine($all_functions, $all_functions);
-
+		[$functions_by_category, $all_functions] = $formRenderer->prepareFieldFunctions();
 		$byteaInlineLimit = isset($conf['bytea_inline_limit']) ? (int) $conf['bytea_inline_limit'] : 1024 * 1024;
 		if ($byteaInlineLimit < 0) {
 			$byteaInlineLimit = 0;
@@ -292,24 +263,14 @@ EOT;
 				echo $misc->printVal($pg->formatType($attrs->fields['type'], $attrs->fields['atttypmod']));
 				//echo "<input type=\"hidden\" name=\"types[", htmlspecialchars($attrs->fields['attname']), "]\" value=\"", htmlspecialchars($attrs->fields['type']), "\" /></td>";
 				echo "<td>\n";
-				$sel_fnc_id = "sel_fnc_" . htmlspecialchars($attrs->fields['attname']);
-				echo "<select id=\"$sel_fnc_id\" name=\"format[", htmlspecialchars($attrs->fields['attname']), "]\">\n";
-				echo "<option></option>\n";
-				$format = $_REQUEST['format'][$attrs->fields['attname']] ?? '';
-				foreach ($functions_by_category as $category => $functions) {
-					echo "<optgroup label=\"", htmlspecialchars($category), "\">\n";
-					foreach ($functions as $function) {
-						$selected = $format == $function ? " selected" : "";
-						$function_html = htmlspecialchars($function);
-						echo "<option value=\"$function_html\"{$selected}>$function_html</option>\n";
-					}
-					echo "</optgroup>\n";
-				}
-				/*
-				echo "<option value=\"VALUE\"", ($_REQUEST['format'][$attrs->fields['attname']] == 'VALUE') ? ' selected="selected"' : '', ">{$lang['strvalue']}</option>\n";
-				echo "<option value=\"EXPRESSION\"", ($_REQUEST['format'][$attrs->fields['attname']] == 'EXPRESSION') ? ' selected="selected"' : '', ">{$lang['strexpression']}</option>\n";
-				*/
-				echo "</select>\n</td>\n";
+				$formRenderer->printFieldFunctions(
+					"format[{$attrs->fields['attname']}]",
+					$_REQUEST['format'][$attrs->fields['attname']] ?? '',
+					[
+						'id' => "sel_fnc_" . htmlspecialchars($attrs->fields['attname'])
+					],
+				);
+				echo "</td>\n";
 				echo "<td class=\"text-center\">";
 				// Output null box if the column allows nulls (doesn't look at CHECKs or ASSERTIONS)
 				if (!$attrs->fields['attnotnull']) {
@@ -927,18 +888,12 @@ function popupEdit()
 
 	// Fetch actual field value from database using keys
 	$whereParts = [];
-	foreach ($keys as $keyName => $keyValue) {
-		// Extract field name from "key[fieldname]" format
-		if (preg_match('/^key\[(.+)\]$/', $keyName, $matches)) {
-			$keyField = $matches[1];
+	foreach ($keys as $keyField => $keyValue) {
+		if ($keyValue === null) {
+			// Does this actually make sense for key fields?
+			$whereParts[] = $pg->quoteIdentifier($keyField) . ' IS NULL';
 		} else {
-			$keyField = $keyName;
-		}
-
-		if ($keyValue === null || (is_string($keyValue) && strcasecmp($keyValue, 'NULL') === 0)) {
-			$whereParts[] = $pg->escapeIdentifier($keyField) . ' IS NULL';
-		} else {
-			$whereParts[] = $pg->escapeIdentifier($keyField) . ' = ' . $pg->clean($keyValue);
+			$whereParts[] = $pg->quoteIdentifier($keyField) . ' = ' . $pg->escapeLiteral($keyValue);
 		}
 	}
 
@@ -949,8 +904,8 @@ function popupEdit()
 	}
 
 	$whereClause = implode(' AND ', $whereParts);
-	$valueSql = 'SELECT ' . $pg->escapeIdentifier($field) . ' FROM ' .
-		$pg->escapeIdentifier($schema) . '.' . $pg->escapeIdentifier($table) .
+	$valueSql = 'SELECT ' . $pg->quoteIdentifier($field) . ' FROM ' .
+		$pg->quoteIdentifier($schema) . '.' . $pg->quoteIdentifier($table) .
 		' WHERE ' . $whereClause . ' LIMIT 1';
 
 	$valueResult = $pg->selectSet($valueSql);
@@ -968,9 +923,24 @@ function popupEdit()
 		'autofocus' => 'autofocus',
 	];
 
-	echo '<div class="popup-field-editor" data-field="' . htmlspecialchars($field) . '" data-type="' . htmlspecialchars($type) . '">';
-	echo '<div class="popup-field-label">' . htmlspecialchars($field) . '</div>';
-	echo $formRenderer->printFieldAsHTML('value', $value, $type, $extras, null, true);
+	echo '<div class="popup-field-editor p-2">';
+	echo '<div class="popup-field-label mb-1">' . htmlspecialchars($field) . '</div>';
+	$formRenderer->printField('value', $value, $type, $extras, null);
+
+	$nullChecked = isset($value) ? '' : ' checked';
+	echo '<div class="popup-field-options">';
+	$formRenderer->printFieldFunctions(
+		"_function",
+		'',
+		[
+			'id' => 'popup-function-sel',
+			'class' => 'my-2'
+		],
+	);
+	echo "<label class=\"mr-2\"><input type=\"checkbox\" name=\"_isnull\" id=\"popup-null-cb\" class=\"mr-1\"{$nullChecked}>" . htmlspecialchars($lang['strnull']) . "</label> ";
+	echo '<label><input type="checkbox" name="_isexpr" id="popup-expr-cb" class="mr-1"> ' . htmlspecialchars($lang['strexpression']) . '</label>';
+	echo '</div>';
+
 	echo '</div>';
 
 	exit;

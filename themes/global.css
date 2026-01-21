@@ -790,7 +790,7 @@ pre code.hljs {
 	position: absolute;
 	z-index: 10000;
 	min-width: 200px;
-	max-width: 500px;
+	/*max-width: 500px;*/
 }
 
 .popup-field-editor {
@@ -798,14 +798,12 @@ pre code.hljs {
 	border: 1px solid #ccc;
 	border-radius: 4px;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-	padding: 8px;
 }
 
 .popup-field-label {
 	font-weight: bold;
-	margin-bottom: 4px;
-	font-size: 12px;
 	color: #333;
+	display: none;
 }
 
 .popup-field-input {
@@ -813,27 +811,27 @@ pre code.hljs {
 	box-sizing: border-box;
 }
 
+textarea.popup-field-input,
+.sql-editor.resizable.popup-field-input {
+	resize: both;
+	min-height: 80px;
+	min-width: 300px;
+}
+
 .popup-field-options {
-	margin-top: 6px;
 	font-size: 12px;
 }
 
 .popup-field-options label {
 	display: inline-block;
-	margin-right: 10px;
-	cursor: pointer;
-}
-
-.popup-field-options input[type="checkbox"] {
-	margin-right: 3px;
-	cursor: pointer;
-}
-
-td.editable {
-	cursor: pointer;
 }
 
 td.editable:hover {
 	background-color: #f5f5f5;
 	outline: 1px solid #ddd;
+}
+
+td.editable.active {
+	background-color: #e6f7ff;
+	outline: 1px solid #1890ff;
 }

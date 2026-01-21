@@ -11,6 +11,18 @@
 		return false;
 	};
 
+	/* SQL Quoting Helpers */
+	window.pgQuoteIdent = function (ident) {
+		return '"' + String(ident).replace(/"/g, '""') + '"';
+	};
+
+	window.pgQuoteLiteral = function (value) {
+		if (value === null || value === undefined) {
+			return "NULL";
+		}
+		return "'" + String(value).replace(/'/g, "''") + "'";
+	};
+
 	/**
 	 * SQL query extractor
 	 * @param {string} sql
@@ -398,6 +410,7 @@
 
 		hidden.id = element.id;
 		hidden.value = editor.getValue();
+		hidden.editor = editor;
 		hidden.beginEdit = (content) => {
 			editor.setValue(content, -1);
 			editor.focus();
@@ -604,11 +617,10 @@
 	// Initialization
 
 	flatpickr.localize(flatpickr.l10ns.default);
-	//createSqlEditors(document.documentElement);
-	//createDateAndTimePickers(document.documentElement);
 	window.createSqlEditor = createSqlEditor;
 	window.createSqlViewer = createSqlViewer;
 	window.createSqlEditors = createSqlEditors;
+	window.createDateAndTimePickers = createDateAndTimePickers;
 
 	hljs.registerLanguage("pgsql", function (hljs) {
 		const base = hljs.getLanguage("pgsql");

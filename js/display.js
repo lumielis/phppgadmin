@@ -1,5 +1,5 @@
 (function () {
-	/* FK Popup Management */
+	//#region FK Popup Management
 
 	const FKPopupManager = {
 		maxPopups: 5,
@@ -266,9 +266,18 @@
 	// Initialize FK popup system
 	FKPopupManager.init();
 
-	/* End FK Popup Management */
+	// Virtual Frame Unload Event
+	document.addEventListener(
+		"beforeFrameUnload",
+		() => {
+			FKPopupManager.unload();
+		},
+		{ once: true },
+	);
 
-	/* Column Sorting Management */
+	//#endregion End FK Popup Management
+
+	//#region Column Sorting Management
 
 	const reverseSortDir = {
 		asc: "desc",
@@ -343,47 +352,35 @@
 		});
 	});
 
-	// Ensure initialization only happens once
-	if (!window.displayJsInitialized) window.displayJsInitialized = true;
-	else return;
-
-	// Virtual Frame Load Event
-	document.addEventListener("frameLoaded", function (e) {
-		//window.clearTimeout(tooltipTimout);
-		//window.hideTooltip();
-	});
-
 	// Virtual Frame Unload Event
-	document.addEventListener("beforeFrameUnload", () => {
-		FKPopupManager.unload();
-		window.clearTimeout(tooltipTimout);
-		window.hideTooltip();
-	});
+	document.addEventListener(
+		"beforeFrameUnload",
+		() => {
+			window.clearTimeout(tooltipTimout);
+			window.hideTooltip();
+		},
+		{ once: true },
+	);
 
-	/* End Column Sorting Management */
+	//#endregion End Column Sorting
 
-	/* SQL Quoting Helpers */
-	window.pgQuoteIdent = function (ident) {
-		return '"' + String(ident).replace(/"/g, '""') + '"';
-	};
+	//#region Popup Field Editor
 
-	window.pgQuoteLiteral = function (value) {
-		if (value === null || value === undefined || value === "") {
-			return "NULL";
-		}
-		return "'" + String(value).replace(/'/g, "''") + "'";
-	};
-
-	/* Popup Field Editor Management */
 	const FieldPopupEditor = {
 		currentPopup: null,
 		popperInstance: null,
 		currentCell: null,
-		originalValue: null,
+		_boundOutsideClick: null,
+		_boundKeydown: null,
 
 		init() {
+			this.unload();
+
 			const dataTable = document.querySelector("table#data");
 			if (!dataTable) return;
+
+			this._boundOutsideClick = this.handleOutsideClick.bind(this);
+			this._boundKeydown = this.handleKeydown.bind(this);
 
 			// Attach double-click handler using event delegation
 			dataTable.addEventListener("dblclick", (e) =>
@@ -391,12 +388,19 @@
 			);
 
 			// Attach click-outside handler
-			document.addEventListener("click", (e) =>
-				this.handleOutsideClick(e),
-			);
-
+			document.addEventListener("click", this._boundOutsideClick);
 			// Attach keydown handler for Escape
-			document.addEventListener("keydown", (e) => this.handleKeydown(e));
+			document.addEventListener("keydown", this._boundKeydown);
+
+			// Restore scroll position if available
+			let scrollTop = sessionStorage.getItem("contentScrollTop");
+			if (scrollTop !== null) {
+				const contentDiv = document.getElementById("content");
+				if (contentDiv) {
+					contentDiv.scrollTop = parseInt(scrollTop, 10);
+				}
+				sessionStorage.removeItem("contentScrollTop");
+			}
 		},
 
 		handleDoubleClick(e) {
@@ -433,7 +437,7 @@
 			}
 		},
 
-		openEditor(cell) {
+		async openEditor(cell) {
 			// Close existing popup
 			if (this.currentPopup) {
 				this.close();
@@ -464,14 +468,11 @@
 			this.currentCell = cell;
 
 			// Build URL
+			const urlParams = new URLSearchParams(window.location.search);
 			const params = new URLSearchParams({
 				action: "popupedit",
-				server: new URLSearchParams(window.location.search).get(
-					"server",
-				),
-				database: new URLSearchParams(window.location.search).get(
-					"database",
-				),
+				server: urlParams.get("server"),
+				database: urlParams.get("database"),
 				schema: schema,
 				table: tableName,
 				field: fieldName,
@@ -479,27 +480,29 @@
 			});
 
 			// Fetch editor HTML
-			fetch("display.php?" + params.toString())
-				.then((response) => {
-					if (!response.ok) throw new Error("Failed to load editor");
-					return response.text();
-				})
-				.then((html) => {
-					this.showPopup(
-						cell,
-						html,
-						row,
-						schema,
-						tableName,
-						fieldName,
-					);
-				})
-				.catch((err) => {
-					console.error("Error loading editor:", err);
-				});
+			try {
+				const response = await fetch(
+					"display.php?" + params.toString(),
+				);
+				if (!response.ok) {
+					throw new Error("Failed to load editor");
+				}
+				const html = await response.text();
+				this.showPopup(
+					cell,
+					html,
+					row,
+					schema,
+					tableName,
+					fieldName,
+					fieldType,
+				);
+			} catch (err) {
+				console.error("Error loading editor:", err);
+			}
 		},
 
-		showPopup(cell, html, row, schema, tableName, fieldName) {
+		showPopup(cell, html, row, schema, tableName, fieldName, fieldType) {
 			// Create popup element
 			const popup = document.createElement("div");
 			popup.className = "field-popup-container";
@@ -507,6 +510,7 @@
 			document.body.appendChild(popup);
 
 			this.currentPopup = popup;
+			cell.classList.add("active");
 
 			// Create Popper instance
 			if (window.Popper) {
@@ -534,102 +538,205 @@
 			}
 
 			// Focus input
-			const input = popup.querySelector("input, textarea, select");
+			const input = popup.querySelector(
+				"input[name=value], textarea[name=value], select[name=value]",
+			);
+			const nullCb = popup.querySelector("#popup-null-cb");
 			if (input) {
 				setTimeout(() => {
 					input.focus();
 					if (input.select) input.select();
 				}, 50);
+				input.onchange = () => {
+					if (nullCb) nullCb.checked = false;
+				};
+				popup.dataset.value = input.value;
 			}
+			popup.dataset.isNull = nullCb?.checked ?? false;
 
 			// Store row data for SQL generation
 			popup.dataset.schema = schema;
 			popup.dataset.table = tableName;
 			popup.dataset.field = fieldName;
-			popup.dataset.keys = row.dataset.keys || "{}";
+			popup.dataset.type = fieldType;
+			popup.dataset.keys = row.dataset.keys;
+
+			createSqlEditors(popup);
+			createDateAndTimePickers(popup);
 		},
 
 		saveAndClose() {
 			if (!this.currentPopup) return;
 
+			/**
+			 * Formats a value or expression for SQL purposes.
+			 * @param {string} type      The type of the field
+			 * @param {string|null} func A SQL function template containing the word "value"
+			 * @param {boolean} isExpr     Treat value as raw SQL expression
+			 * @param {boolean} isNull   Whether the value is null
+			 * @param {string|null} value The actual value entered in the field (may be null)
+			 * @returns {string}
+			 */
+			function formatValue(type, func, isExpr, isNull, value) {
+				if (isNull) {
+					return "NULL";
+				}
+
+				// Normalize null/undefined
+				if (value === null || value === undefined) {
+					value = "";
+				}
+
+				switch (type) {
+					case "bool":
+					case "boolean":
+						if (value === "t") return "TRUE";
+						if (value === "f") return "FALSE";
+						if (value === "") return "NULL";
+						return value;
+				}
+
+				// SQL function case: e.g. "ENCODE(value,'base64')"
+				if (func) {
+					let v = value;
+					if (!isExpr) {
+						v = pgQuoteLiteral(value);
+					}
+					return func.replace(/\bvalue\b/g, v);
+				}
+
+				// Raw SQL expression
+				if (isExpr) {
+					return value;
+				}
+
+				// Date/time types
+				const isDateOrTime =
+					type.length >= 4 &&
+					(type.startsWith("time") || type.startsWith("date"));
+
+				if (isDateOrTime) {
+					if (value === "") return "''";
+
+					const upper = value.toUpperCase();
+					const keywords = [
+						"CURRENT_TIMESTAMP",
+						"CURRENT_TIME",
+						"CURRENT_DATE",
+						"LOCALTIME",
+						"LOCALTIMESTAMP",
+					];
+
+					if (keywords.includes(upper)) {
+						return value;
+					}
+				}
+
+				// Default: quote and escape
+				return pgQuoteLiteral(value);
+			}
+
 			const schema = this.currentPopup.dataset.schema;
 			const table = this.currentPopup.dataset.table;
 			const field = this.currentPopup.dataset.field;
-			const keys = JSON.parse(this.currentPopup.dataset.keys || "{}");
+			const keys = JSON.parse(this.currentPopup.dataset.keys);
 
 			// Get input value
-			const input = this.currentPopup.querySelector(
-				'input[name="value"], textarea[name="value"], select[name="value"]',
+			const inputField = this.currentPopup.querySelector(
+				"input[name=value], textarea[name=value], select[name=value]",
 			);
 			const nullCheckbox =
 				this.currentPopup.querySelector("#popup-null-cb");
 			const exprCheckbox =
 				this.currentPopup.querySelector("#popup-expr-cb");
+			const functionSelect = this.currentPopup.querySelector(
+				"#popup-function-sel",
+			);
 
-			if (!input) {
+			if (!inputField) {
 				this.close();
 				return;
 			}
 
-			const newValue = input.value;
+			const newValue = inputField.value;
 			const isNull = nullCheckbox && nullCheckbox.checked;
 			const isExpr = exprCheckbox && exprCheckbox.checked;
+			const functionValue = functionSelect && functionSelect.value;
+
+			if (
+				newValue === this.currentPopup.dataset.value &&
+				isNull.toString() === this.currentPopup.dataset.isNull &&
+				!isExpr
+			) {
+				// No changes made
+				this.close();
+				return;
+			}
 
 			// Generate UPDATE SQL
 			let sql =
 				"UPDATE " +
-				window.pgQuoteIdent(schema) +
+				pgQuoteIdent(schema) +
 				"." +
-				window.pgQuoteIdent(table) +
+				pgQuoteIdent(table) +
 				" SET ";
 
 			// SET clause
-			if (isNull) {
-				sql += window.pgQuoteIdent(field) + " = NULL";
-			} else if (isExpr) {
-				sql += window.pgQuoteIdent(field) + " = " + newValue;
-			} else {
-				sql +=
-					window.pgQuoteIdent(field) +
-					" = " +
-					window.pgQuoteLiteral(newValue);
-			}
+			sql += pgQuoteIdent(field) + " = ";
+			sql += formatValue(
+				this.currentPopup.dataset.type,
+				functionValue,
+				isExpr,
+				isNull,
+				newValue,
+			);
 
 			// WHERE clause
 			const whereParts = [];
 			for (const [keyName, keyValue] of Object.entries(keys)) {
-				// Extract field name from "key[fieldname]" format
-				const match = keyName.match(/^key\[(.+)\]$/);
-				if (!match) continue;
-				const fieldName = match[1];
-
-				if (keyValue === null || keyValue === "NULL") {
-					whereParts.push(
-						window.pgQuoteIdent(fieldName) + " IS NULL",
-					);
+				if (keyValue === null) {
+					whereParts.push(pgQuoteIdent(keyName) + " IS NULL");
 				} else {
 					whereParts.push(
-						window.pgQuoteIdent(fieldName) +
+						pgQuoteIdent(keyName) +
 							" = " +
-							window.pgQuoteLiteral(keyValue),
+							pgQuoteLiteral(keyValue),
 					);
 				}
 			}
 
-			if (whereParts.length > 0) {
-				sql += " WHERE " + whereParts.join(" AND ");
+			if (whereParts.length == 0) {
+				console.error("No keys available for WHERE clause!");
+				this.close();
+				return;
 			}
+			sql += " WHERE " + whereParts.join(" AND ") + ";";
 
-			sql += ";";
+			console.log("Generated SQL:", sql);
 
-			// Update query editor and submit form
-			if (typeof setEditorValue === "function") {
-				setEditorValue("query-editor", sql);
+			const editor = document.getElementById("query-editor");
+			if (!editor) {
+				console.error("Query editor not found!");
+				this.close();
+				return;
+			}
+			if (editor.beginEdit) {
+				editor.beginEdit(sql + "\n");
+			} else {
+				editor.value = sql;
 			}
 
 			const form = document.getElementById("query-form");
 			if (form) {
-				form.submit();
+				const submit = form.querySelector('[type="submit"]');
+				if (submit) {
+					// Save scroll position
+					sessionStorage.setItem(
+						"contentScrollTop",
+						document.getElementById("content").scrollTop,
+					);
+					submit.click();
+				}
 			}
 
 			this.close();
@@ -646,11 +753,19 @@
 				this.currentPopup = null;
 			}
 
-			this.currentCell = null;
-			this.originalValue = null;
+			if (this.currentCell) {
+				this.currentCell.classList.remove("active");
+				this.currentCell = null;
+			}
 		},
 
 		unload() {
+			if (this._boundOutsideClick) {
+				document.removeEventListener("click", this._boundOutsideClick);
+			}
+			if (this._boundKeydown) {
+				document.removeEventListener("keydown", this._boundKeydown);
+			}
 			this.close();
 		},
 	};
@@ -659,7 +774,13 @@
 	FieldPopupEditor.init();
 
 	// Cleanup on unload
-	document.addEventListener("beforeFrameUnload", () => {
-		FieldPopupEditor.unload();
-	});
+	document.addEventListener(
+		"beforeFrameUnload",
+		() => {
+			FieldPopupEditor.unload();
+		},
+		{ once: true },
+	);
+
+	//#endregion End Popup Field Editor
 })();

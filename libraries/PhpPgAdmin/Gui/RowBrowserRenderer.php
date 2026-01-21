@@ -315,9 +315,14 @@ class RowBrowserRenderer extends AppContext
             elseif ($v !== null && $v == '')
                 echo "<td>&nbsp;</td>";
             else {
-
-                echo "<td class=\"$class\" data-type=\"$finfo->type\" data-name=\"" . htmlspecialchars($finfo->name) . "\">";
-
+                if (isset($byteaCols[$finfo->name]) || str_starts_with($finfo->type, '_')) {
+                    // Bytea and array types are not editable at the
+                    $tdClass = "";
+                } else {
+                    $tdClass = $class;
+                }
+                $type = isset($byteaCols[$finfo->name]) ? 'bytea' : $finfo->type;
+                echo "<td class=\"$tdClass\" data-type=\"$type\" data-name=\"" . htmlspecialchars($finfo->name) . "\">";
                 $valParams = [
                     'null' => true,
                     'clip' => ($_REQUEST['strings'] == 'collapsed')
@@ -341,6 +346,7 @@ class RowBrowserRenderer extends AppContext
         $misc = AppContainer::getMisc();
         $lang = AppContainer::getLang();
 
+        $query = trim($query);
         $succeded = $pg->execute($query) === 0;
 
         echo "<div class=\"query-box mb-2\">\n";
@@ -353,7 +359,8 @@ class RowBrowserRenderer extends AppContext
             </div>
         <?php endif ?>
         <div class="actions">
-            [<a href="javascript:void(0)" onclick="setEditorValue('query-editor', '<?= htmlspecialchars($query) ?>');">
+            [<a href="javascript:void(0)"
+                onclick="setEditorValue('query-editor', <?= htmlspecialchars(json_encode($query)) ?>);">
                 <span class="psm">✎</span>
                 <?= htmlspecialchars($lang['stredit']) ?>
             </a>]
@@ -363,10 +370,10 @@ class RowBrowserRenderer extends AppContext
                     if (element) {
                         //console.log("Setting editor value for", id);
                         if (element.beginEdit) {
-                            element.beginEdit(content);
+                            element.beginEdit(content + "\n");
                         }
                         else {
-                            element.value = content;
+                            element.value = content + "\n";
                             element.focus();
                         }
                     }
@@ -762,15 +769,10 @@ class RowBrowserRenderer extends AppContext
                 $lang
             );
 
-            $edit_url = $actions['actionbuttons']['edit']['attr']['href'] ?? null;
-
             $table_data = "";
-            if (!empty($key_fields) && !empty($edit_url)) {
+            if (!empty($key_fields)) {
                 $table_data .= " data-schema=\"" . htmlspecialchars($_gets['schema']) . "\"";
                 $table_data .= " data-table=\"" . htmlspecialchars($_gets['table']) . "\"";
-                $load_url = $edit_url;
-                $load_url['urlvars']['action'] = 'popupedit';
-                $table_data .= " data-load=\"{$load_url['url']}?" . htmlspecialchars(http_build_query($load_url['urlvars'])) . "\"";
             }
 
             echo "<table id=\"data\"{$table_data}>\n";
@@ -817,15 +819,21 @@ class RowBrowserRenderer extends AppContext
                 $editable = $colspan > 0 && !empty($key_fields);
                 if ($editable) {
                     $keys_array = [];
+                    $keys_hash = [];
                     $keys_complete = true;
                     foreach ($key_fields as $v) {
-                        $keyVal = $this->getFieldValueByName($rs, $nameIndexMap, (string) $v);
+                        $keyVal = $this->getFieldValueByName(
+                            $rs,
+                            $nameIndexMap,
+                            (string) $v
+                        );
                         if ($keyVal === null) {
                             $keys_complete = false;
                             $editable = false;
                             break;
                         }
                         $keys_array["key[{$v}]"] = $keyVal;
+                        $keys_hash[$v] = $keyVal;
                     }
 
                     $tr_data = "";
@@ -851,7 +859,7 @@ class RowBrowserRenderer extends AppContext
                         }
 
                         if ($editable) {
-                            $tr_data .= " data-keys='" . htmlspecialchars(json_encode($keys_array)) . "'";
+                            $tr_data .= " data-keys='" . htmlspecialchars(json_encode($keys_hash)) . "'";
                         }
                     }
 

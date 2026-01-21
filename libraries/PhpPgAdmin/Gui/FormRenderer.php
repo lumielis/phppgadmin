@@ -180,31 +180,69 @@ class FormRenderer extends AppContext
 		}
 	}
 
-	/**
-	 * Returns the HTML code for a particular field as a string
-	 * @param string $name The name to give the field
-	 * @param string $value The value of the field
-	 * @param string $type The database type of the field
-	 * @param array $extras An array of attributes name as key and attributes' values as value
-	 * @param mixed $options Additional options for special field types
-	 * @param bool $includeCheckboxes Whether to include NULL and Expression checkboxes
-	 * @return string The HTML output
-	 */
-	function printFieldAsHTML($name, $value, $type, $extras = [], $options = null, $includeCheckboxes = false)
+	public function prepareFieldFunctions()
 	{
-		ob_start();
-		$this->printField($name, $value, $type, $extras, $options);
-		$html = ob_get_clean();
+		static $function_def = <<<EOT
+Date/Time
+CURRENT_DATE, CURRENT_TIME, NOW (), DATE_TRUNC (value), AGE (value), TO_CHAR (value), TO_DATE (value), INTERVAL
+Strings/Text
+LENGTH (value), CHAR_LENGTH (value), LOWER (value), UPPER (value), TRIM (value), LTRIM (value), RTRIM (value), MD5 (value), ENCODE (value,'base64'), ENCODE (value,'escape'), ENCODE (value,'hex'), DECODE (value,'base64'), DECODE (value,'escape'), DECODE (value,'hex')
+Math
+ABS (value), CEIL (value), FLOOR (value), ROUND (value), EXP (value), LOG (value), LOG10 (value), POWER (value), SQRT (value), PI (value), SIN (value), COS (value), TAN (value)
+UUID
+gen_random_uuid (), uuid_generate_v4 ()
+Network
+inet, cidr, host (value), hostmask (value), network (value), masklen (value)
+System/Info
+current_user, session_user, version (), database ()
+EOT;
+		static $functions_by_category = null;
+		static $all_functions = null;
+		if (!isset($functions_by_category)) {
+			$functions_by_category = [];
+			$all_functions = [];
+			$category = null;
+			foreach (explode("\n", $function_def) as $line) {
+				if (!isset($category)) {
+					$category = $line;
+					continue;
+				}
+				$functions_subset = explode(', ', $line);
+				$functions_by_category[$category] = $functions_subset;
+				$all_functions = array_merge_recursive($all_functions, $functions_subset);
+				$category = null;
+			}
+			// make function searchable by key
+			$all_functions = array_combine($all_functions, $all_functions);
+		}
+		return [$functions_by_category, $all_functions];
+	}
 
-		if ($includeCheckboxes) {
-			$lang = $this->lang();
-			$html .= '<div class="popup-field-options">';
-			$html .= '<label><input type="checkbox" name="_isnull" id="popup-null-cb"> ' . htmlspecialchars($lang['strnull'] ?? 'NULL') . '</label> ';
-			$html .= '<label><input type="checkbox" name="_isexpr" id="popup-expr-cb"> ' . htmlspecialchars($lang['strexpression'] ?? 'Expression') . '</label>';
-			$html .= '</div>';
+	/**
+	 * @param string $name The name to give the function select field
+	 * @param string $value The value of the function field.
+	 */
+	function printFieldFunctions($name, $value, $extras = [])
+	{
+		[$functions_by_category] = $this->prepareFieldFunctions();
+		$extra_str = '';
+		foreach ($extras as $k => $v) {
+			$extra_str .= " {$k}=\"" . htmlspecialchars($v ?? '') . "\"";
 		}
 
-		return $html;
+		echo "<select $extra_str name=\"", htmlspecialchars($name), "\">\n";
+		echo "<option></option>\n";
+		foreach ($functions_by_category as $category => $functions) {
+			echo "<optgroup label=\"", htmlspecialchars($category), "\">\n";
+			foreach ($functions as $function) {
+				$selected = $value == $function ? " selected" : "";
+				$function_html = htmlspecialchars($function);
+				echo "<option value=\"$function_html\"{$selected}>$function_html</option>\n";
+			}
+			echo "</optgroup>\n";
+		}
+		echo "</select>\n";
+
 	}
 
 }
