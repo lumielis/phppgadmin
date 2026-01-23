@@ -205,6 +205,7 @@ $php_libraries_requirements = [
 	// required_function => name_of_the_php_library
 	'pg_connect' => 'pgsql',
 	'mb_strlen' => 'mbstring',
+	'sodium_crypto_secretbox' => 'sodium',
 ];
 $missing_libraries = [];
 foreach ($php_libraries_requirements as $func_name => $lib) {

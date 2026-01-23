@@ -13,6 +13,7 @@
 		"php": ">=7.2",
 		"ext-pgsql": "*",
 		"ext-mbstring": "*",
+		"ext-sodium": "*",
 		"greenlion/php-sql-parser": "dev-master"
 	},
 	"autoload": {
