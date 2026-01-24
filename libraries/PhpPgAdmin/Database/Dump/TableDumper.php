@@ -131,20 +131,12 @@ class TableDumper extends ExportDumper
                 $this->write(",\n");
             }
             $name = $this->connection->quoteIdentifier($atts->fields['attname']);
-            $this->write("    {$name}");
-            if (
-                $this->connection->phpBool($atts->fields['attisserial']) &&
-                ($atts->fields['type'] == 'integer' || $atts->fields['type'] == 'bigint')
-            ) {
-                $this->write(($atts->fields['type'] == 'integer') ? " SERIAL" : " BIGSERIAL");
-            } else {
-                $this->write(" " . $atts->fields['type']);
-                if ($this->connection->phpBool($atts->fields['attnotnull'])) {
-                    $this->write(" NOT NULL");
-                }
-                if ($atts->fields['adsrc'] !== null) {
-                    $this->write(" DEFAULT {$atts->fields['adsrc']}");
-                }
+            $this->write("    {$name} {$atts->fields['type']}");
+            if ($this->connection->phpBool($atts->fields['attnotnull'])) {
+                $this->write(" NOT NULL");
+            }
+            if ($atts->fields['adsrc'] !== null) {
+                $this->write(" DEFAULT {$atts->fields['adsrc']}");
             }
 
             if ($atts->fields['comment'] !== null) {
@@ -200,15 +192,33 @@ class TableDumper extends ExportDumper
         $first = true;
         while (!$atts->EOF) {
             $fieldQuoted = $this->connection->quoteIdentifier($atts->fields['attname']);
-            // Only output SET STATISTICS if the value is non-negative and not empty
-            if ($atts->fields['attstattarget'] >= 0) {
+
+            // Set sequence ownership if applicable
+            if (!empty($atts->fields['sequence_name'])) {
                 if ($first) {
                     $this->write("\n");
                     $first = false;
                 }
-                $this->write("ALTER TABLE ONLY {$this->schemaQuoted}.{$this->tableQuoted} ALTER COLUMN {$fieldQuoted} SET STATISTICS {$atts->fields['attstattarget']};\n");
+                $sequenceQuoted = $this->connection->quoteIdentifier($atts->fields['sequence_name']);
+                $this->write("\nALTER SEQUENCE {$this->schemaQuoted}.{$sequenceQuoted} OWNED BY {$this->schemaQuoted}.{$this->tableQuoted}.{$fieldQuoted};\n");
             }
+
+            // Set statistics target
+            $stat = $atts->fields['attstattarget'];
+            if ($stat !== null && $stat !== '' && is_numeric($stat) && $stat >= 0) {
+                if ($first) {
+                    $this->write("\n");
+                    $first = false;
+                }
+                $this->write("ALTER TABLE ONLY {$this->schemaQuoted}.{$this->tableQuoted} ALTER COLUMN {$fieldQuoted} SET STATISTICS {$stat};\n");
+            }
+
+            // Set storage parameter
             if ($atts->fields['attstorage'] != $atts->fields['typstorage']) {
+                if ($first) {
+                    $this->write("\n");
+                    $first = false;
+                }
                 $storage = null;
                 switch ($atts->fields['attstorage']) {
                     case 'p':

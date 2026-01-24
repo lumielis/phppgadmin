@@ -340,6 +340,7 @@ function doEditRow($confirm, $msg = '')
 	echo "<table class=\"data\">\n";
 
 	// Output table header
+	echo "<thead class=\"sticky-thead\">\n";
 	echo "<tr>\n";
 	//echo "<th class=\"data\"></th>\n";
 	echo "<th class=\"data\">{$lang['strcolumn']}</th>\n";
@@ -349,6 +350,8 @@ function doEditRow($confirm, $msg = '')
 	echo "<th class=\"data\">{$lang['strvalue']}</th>\n";
 	echo "<th class=\"data\">{$lang['strexpr']}</th>\n";
 	echo "</tr>";
+	echo "</thead>\n";
+	echo "<tbody>\n";
 
 	$i = 0;
 	while (!$attrs->EOF) {
@@ -485,6 +488,7 @@ function doEditRow($confirm, $msg = '')
 		$i++;
 		$attrs->moveNext();
 	}
+	echo "</tbody>\n";
 	echo "</table>\n";
 
 	echo "<input type=\"hidden\" name=\"action\" value=\"editrow\" />\n";

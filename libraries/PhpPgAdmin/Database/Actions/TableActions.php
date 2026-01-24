@@ -77,8 +77,8 @@ class TableActions extends AppActions
         $this->connection->clean($c_schema);
         $this->connection->clean($table);
 
-        $sql = "
-            SELECT
+        $sql =
+            "SELECT
               c.relname, n.nspname, u.usename AS relowner, c.oid, c.relkind,
               c.relacl,
               pg_catalog.obj_description(c.oid, 'pg_class') AS relcomment,
@@ -201,10 +201,16 @@ class TableActions extends AppActions
                 a.attstattarget,
                 a.attstorage,
                 t.typstorage,
+                seq.relname AS sequence_name,
                 col_description(a.attrelid, a.attnum) AS comment
             FROM pg_attribute a
             LEFT JOIN pg_attrdef ad ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
             LEFT JOIN pg_type t ON a.atttypid = t.oid
+            LEFT JOIN pg_depend d ON d.refobjid = a.attrelid
+                                AND d.refobjsubid = a.attnum
+                                AND d.deptype = 'a'
+                                AND d.classid = 'pg_class'::regclass
+            LEFT JOIN pg_class seq ON seq.oid = d.objid AND seq.relkind = 'S'
             WHERE a.attrelid = (
                 SELECT oid FROM pg_class
                 WHERE relname = '{$table}'

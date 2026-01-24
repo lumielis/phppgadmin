@@ -178,6 +178,7 @@ function doDefault($msg = '')
 
 	$columns = [
 		'rule' => [
+			'icon' => 'Rule',
 			'title' => $lang['strname'],
 			'field' => field('rulename'),
 		],
@@ -230,6 +231,7 @@ function doDefault($msg = '')
 					]
 				]
 			],
+			'icon' => $misc->icon('CreateRule'),
 			'content' => $lang['strcreaterule']
 		]
 	], 'rules-rules', get_defined_vars());

@@ -43,25 +43,32 @@ class SequenceActions extends AppActions
             $join = 'CROSS JOIN ( values (null, null, null) ) AS s (last_value, log_cnt, is_called) ';
         }
 
-        $sql = "
-            SELECT
+        $sql =
+            "SELECT
                 c.relname AS seqname,
                 s.last_value, s.log_cnt, s.is_called,
                 m.seqstart AS start_value, m.seqincrement AS increment_by, m.seqmax AS max_value, m.seqmin AS min_value,
                 m.seqcache AS cache_value, m.seqcycle AS is_cycled,
                 pg_catalog.obj_description(c.oid, 'pg_class') as seqcomment,
                 pg_catalog.pg_get_userbyid(c.relowner) as seqowner,
-                n.nspname
-            FROM
-                pg_catalog.pg_class c
-                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                JOIN pg_catalog.pg_sequence m ON m.seqrelid = c.oid
+                n.nspname,
+                t.relname AS owned_table,
+                a.attname AS owned_column
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_catalog.pg_sequence m ON m.seqrelid = c.oid
+            LEFT JOIN pg_depend d
+                ON d.objid = c.oid AND d.deptype = 'a'
+            LEFT JOIN pg_class t
+                ON t.oid = d.refobjid
+            LEFT JOIN pg_attribute a
+                ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
                 {$join}
             WHERE
                 c.relkind IN ('S')
                 AND c.relname = '{$c_sequence}'
                 AND n.nspname = '{$c_schema}'
-        ";
+            ";
 
         return $this->connection->selectSet($sql);
     }

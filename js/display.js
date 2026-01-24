@@ -701,6 +701,7 @@
 			if (
 				newValue === this.currentPopup.dataset.value &&
 				isNull.toString() === this.currentPopup.dataset.isNull &&
+				!functionValue &&
 				!isExpr
 			) {
 				// No changes made

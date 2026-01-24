@@ -465,6 +465,14 @@ function frameSetHandler(postCacheDB) {
 		stickyHeader.id = "sticky-header";
 		content.insertBefore(stickyHeader, content.firstChild);
 
+		const stickyHeaderBg = document.createElement("div");
+		stickyHeaderBg.id = "sticky-header-bg";
+		stickyHeader.appendChild(stickyHeaderBg);
+
+		const stickyHeaderContent = document.createElement("div");
+		stickyHeaderContent.id = "sticky-header-content";
+		stickyHeader.appendChild(stickyHeaderContent);
+
 		// Collect elements to be sticky
 		const stickyElements = [
 			content.querySelector(".topbar"),
@@ -473,7 +481,21 @@ function frameSetHandler(postCacheDB) {
 		].filter(Boolean);
 
 		// Move elements into sticky container
-		stickyElements.forEach((el) => stickyHeader.appendChild(el));
+		stickyElements.forEach((el) => stickyHeaderContent.appendChild(el));
+
+		const updateHeaderBgWidth = () => {
+			stickyHeaderBg.style.width = content.scrollWidth - 2 + "px";
+		};
+
+		window.addEventListener("resize", updateHeaderBgWidth);
+		document.addEventListener(
+			"beforeFrameUnload",
+			() => {
+				window.removeEventListener("resize", updateHeaderBgWidth);
+			},
+			{ once: true },
+		);
+		updateHeaderBgWidth();
 
 		// Get height of sticky header
 		const headerHeight = stickyHeader.getBoundingClientRect().height;
@@ -627,7 +649,7 @@ function frameSetHandler(postCacheDB) {
 		if (target.href === window.location.href + "#") {
 			// Emulate scroll top
 			if (target.classList.contains("bottom_link")) {
-				contentContainer.scrollTo({
+				content.scrollTo({
 					top: 0,
 					left: 0,
 					behavior: "smooth",
@@ -732,6 +754,7 @@ function frameSetHandler(postCacheDB) {
 
 	window.addEventListener("message", (event) => {
 		console.log("Received message:", event.data);
+
 		if (event.origin !== window.location.origin) {
 			console.warn(
 				"Origin mismatch:",
@@ -740,7 +763,9 @@ function frameSetHandler(postCacheDB) {
 			);
 			return;
 		}
+
 		const { type, payload } = event.data;
+
 		if (type === "formSubmission") {
 			//loadContent(payload.url);
 			if (payload.post) {
@@ -845,7 +870,7 @@ function popupHandler() {
 		if (target.href === window.location.href + "#") {
 			// Emulate scroll top
 			if (target.classList.contains("bottom_link")) {
-				contentContainer.scrollTo({
+				document.getElementById("content").scrollTo({
 					top: 0,
 					left: 0,
 					behavior: "smooth",

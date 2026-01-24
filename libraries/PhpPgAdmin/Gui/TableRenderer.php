@@ -80,6 +80,7 @@ class TableRenderer extends AppContext
             }
 
             echo "<table class=\"data\">\n";
+            echo "<thead class=\"sticky-thead\">\n";
             echo "<tr>\n";
 
             // Display column headings
@@ -97,6 +98,8 @@ class TableRenderer extends AppContext
                 echo "</th>\n";
             }
             echo "</tr>\n";
+            echo "</thead>\n";
+            echo "<tbody>\n";
 
             // Display table rows
             $i = 0;
@@ -181,6 +184,7 @@ class TableRenderer extends AppContext
                 $tabledata->moveNext();
                 $i++;
             }
+            echo "</tbody>\n";
             echo "</table>\n";
 
             // Multi action table footer w/ options & [un]check'em all

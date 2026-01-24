@@ -77,10 +77,27 @@ html[dir="rtl"] #frameset {
 	position: sticky;
 	top: 0;
 	background: #fff;
-	z-index: 5;
+	z-index: 10;
 	padding-bottom: 1px;
 }
 
+#sticky-header-bg {
+	content: "";
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	height: 100%;
+	pointer-events: none;
+	background-color: #fff;
+	z-index: 0;
+}
+
+#sticky-header-content {
+	position: relative;
+	z-index: 1;
+}
+
+tr.sticky-thead th,
 thead.sticky-thead th {
 	position: sticky;
 	z-index: 5;
@@ -850,7 +867,7 @@ td.auto-wrap pre {
 }
 
 td.auto-wrap .wrapper {
-	max-width: 1000px;
+	max-width: 750px;
 	max-height: 500px;
 	overflow: auto;
 }
