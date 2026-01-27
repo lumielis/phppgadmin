@@ -41,7 +41,7 @@ class RowSizeEstimator
         string $tableName,
         string $schemaName,
         int $sampleSize = 1000,
-        string $relationKind = null
+        ?string $relationKind = null
     ): int {
         try {
             // Get all column names
@@ -69,7 +69,7 @@ class RowSizeEstimator
             }
 
             // TABLESAMPLE is only valid for ordinary tables, partitioned tables, and materialized views
-            $hasTableSample = in_array($relationKind, ['r', 'p', 'm'], true);
+            $hasTableSample = in_array($relationKind, ['r', 'p', 'm'], true) && $connection->major_version >= 9.5;
             $sql = sprintf(
                 'SELECT MAX(row_size) as max_size, AVG(row_size) as avg_size, MIN(row_size) as min_size
                     FROM (
@@ -89,7 +89,7 @@ class RowSizeEstimator
 
             if ($result && !$result->EOF) {
                 $maxSize = (int) $result->fields['max_size'];
-                $avgSize = (int) $result->fields['avg_size'];
+                //$avgSize = (int) $result->fields['avg_size'];
 
                 // Use max size, but add 20% buffer for variability
                 $estimatedSize = (int) ceil($maxSize * 1.2);
@@ -105,7 +105,7 @@ class RowSizeEstimator
             error_log('Failed to estimate row size: ' . $e->getMessage());
 
             // Fallback to conservative estimate
-            return 5000; // 5KB per row default
+            return 5000; // 50KB per row default
         }
     }
 

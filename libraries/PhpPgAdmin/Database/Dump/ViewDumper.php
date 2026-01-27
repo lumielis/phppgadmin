@@ -42,7 +42,7 @@ class ViewDumper extends ExportDumper
         $this->writeDrop('VIEW', "{$this->schemaQuoted}.{$this->viewQuoted}", $options);
 
         if (!empty($options['if_not_exists'])) {
-            $this->write("CREATE VIEW IF NOT EXISTS {$this->schemaQuoted}.{$this->viewQuoted} AS\n{$rs->fields['vwdefinition']};\n");
+            $this->write("CREATE OR REPLACE VIEW {$this->schemaQuoted}.{$this->viewQuoted} AS\n{$rs->fields['vwdefinition']};\n");
         } else {
             $this->write("CREATE VIEW {$this->schemaQuoted}.{$this->viewQuoted} AS\n{$rs->fields['vwdefinition']};\n");
         }
@@ -55,13 +55,13 @@ class ViewDumper extends ExportDumper
             }
         }
 
-        $this->dumpRules($view, $schema, $options);
-        $this->dumpTriggers($view, $schema, $options);
+        $this->deferRules($view, $schema, $options);
+        $this->deferTriggers($view, $schema, $options);
 
         $this->writePrivileges($view, 'view', $rs->fields['relowner']);
     }
 
-    protected function dumpRules($view, $schema, $options)
+    protected function deferRules($view, $schema, $options)
     {
         $sql =
             "SELECT definition
@@ -72,14 +72,17 @@ class ViewDumper extends ExportDumper
         if (!$rs || $rs->EOF) {
             return;
         }
-        $this->write("\n-- Rules on view {$this->schemaQuoted}.{$this->viewQuoted}\n");
+
         while (!$rs->EOF) {
-            $this->write($rs->fields['definition'] . "\n");
+            // Add to parent SchemaDumper's deferred collection
+            if ($this->parentDumper && method_exists($this->parentDumper, 'addDeferredRule')) {
+                $this->parentDumper->addDeferredRule($schema, $view, $rs->fields['definition']);
+            }
             $rs->moveNext();
         }
     }
 
-    protected function dumpTriggers($view, $schema, $options)
+    protected function deferTriggers($view, $schema, $options)
     {
         // pg_get_triggerdef(oid) is available since 9.0
         $sql =
@@ -99,9 +102,12 @@ class ViewDumper extends ExportDumper
         if ($rs->EOF) {
             return;
         }
-        $this->write("\n-- Triggers on view \"{$this->schemaQuoted}.{$this->viewQuoted}\"\n");
+
         while (!$rs->EOF) {
-            $this->write($rs->fields['definition'] . ";\n");
+            // Add to parent SchemaDumper's deferred collection
+            if ($this->parentDumper && method_exists($this->parentDumper, 'addDeferredTrigger')) {
+                $this->parentDumper->addDeferredTrigger($schema, $view, $rs->fields['definition']);
+            }
             $rs->moveNext();
         }
     }

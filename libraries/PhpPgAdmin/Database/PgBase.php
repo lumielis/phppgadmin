@@ -9,7 +9,7 @@ use ADOConnection;
 use ADORecordSet;
 use PhpPgAdmin\Core\AppContext;
 
-abstract class AppConnection extends AppContext
+abstract class PgBase extends AppContext
 {
 
 	/**

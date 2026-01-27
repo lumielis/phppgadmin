@@ -95,7 +95,8 @@ class TopbarRenderer extends AppContext
                 ]
             ];
 
-            if ($server_info['auth_type'] ?? 'cookie' !== 'cookie') {
+            $authType = $server_info['auth_type'] ?? '';
+            if ($authType == 'http' || $authType == 'config') {
                 unset($toplinks['logout']);
             }
 

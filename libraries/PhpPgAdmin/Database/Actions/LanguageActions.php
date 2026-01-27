@@ -2,9 +2,9 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class LanguageActions extends AppActions
+
+class LanguageActions extends ActionsBase
 {
     // Base constructor inherited from Actions
 

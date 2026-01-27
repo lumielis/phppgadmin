@@ -399,7 +399,7 @@ function doExport($msg = '')
 	}
 
 	$sequenceNames = [];
-	$sequences = $sequenceActions->getSequences(false);
+	$sequences = $sequenceActions->getSequences();
 	while ($sequences && !$sequences->EOF) {
 		$sequenceNames[] = $sequences->fields['seqname'];
 		$sequences->moveNext();

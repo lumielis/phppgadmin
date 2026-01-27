@@ -40,6 +40,8 @@ function handle_process_chunk_stream(): void
 
     ini_set('html_errors', '0');
 
+    AppContainer::set('throw_on_sql_error', true);
+
     try {
         $misc = AppContainer::getMisc();
         $pg = AppContainer::getPostgres();
@@ -75,9 +77,11 @@ function handle_process_chunk_stream(): void
                 'current_database' => '',
                 'current_schema' => '',
                 'active_database' => '',
+                'pending_database' => '',        // Database to switch to before next statement
                 'cached_settings' => [],
                 'last_applied_db' => null,
                 'encoding' => '',
+                'standard_conforming_strings' => true,
             ];
         }
         $streamState = &$_SESSION['stream_import'][$importSessionId];
@@ -105,6 +109,8 @@ function handle_process_chunk_stream(): void
             'rights' => !empty($_REQUEST['opt_rights']),
             'defer_self' => !empty($_REQUEST['opt_defer_self']),
             'allow_drops' => !empty($_REQUEST['opt_allow_drops']),
+            'ignore_connect' => !empty($_REQUEST['opt_ignore_connect']),
+            'verbose' => !empty($_REQUEST['opt_verbose']),
             // Running inside the streaming chunk handler
             'streaming' => true,
         ];
@@ -222,7 +228,10 @@ function handle_process_chunk_stream(): void
             return true;
         };
 
-        $settingsApplier = new SessionSettingsApplier($logCollector);
+        $settingsApplier = new SessionSettingsApplier(
+            $logCollector,
+            $pg->getMajorVersion()
+        );
         if (!empty($streamState['cached_settings'])) {
             $settingsApplier->setCachedSettings($streamState['cached_settings']);
         }
@@ -259,8 +268,6 @@ function handle_process_chunk_stream(): void
             }
             $scope = $_REQUEST['scope'] ?? 'database';
             $scopeIdent = $_REQUEST['scope_ident'] ?? '';
-            $optsToPass = $options;
-            $optsToPass['error_mode'] = ($options['stop_on_error'] ? 'abort' : 'log');
             $execState = [
                 'scope' => $scope,
                 'scope_ident' => $scopeIdent,
@@ -274,7 +281,7 @@ function handle_process_chunk_stream(): void
             $isSuper = $roleActions->isSuperUser();
             ImportExecutor::executeStatementsBatch(
                 $stmts,
-                $optsToPass,
+                $options,
                 $execState,
                 $pg,
                 $scope,
@@ -299,7 +306,6 @@ function handle_process_chunk_stream(): void
             $scope = $_REQUEST['scope'] ?? 'database';
             $scopeIdent = $_REQUEST['scope_ident'] ?? '';
             $optsToPass = $options;
-            $optsToPass['error_mode'] = ($options['stop_on_error'] ? 'abort' : 'log');
             // Force execution of self-affecting statements now.
             $optsToPass['defer_self'] = false;
 
@@ -313,27 +319,22 @@ function handle_process_chunk_stream(): void
             ];
 
             AppContainer::set('quiet_sql_error_handling', true);
-            try {
-                $roleActions = new RoleActions($pg);
-                $isSuper = $roleActions->isSuperUser();
-                ImportExecutor::executeStatementsBatch(
-                    $stmts,
-                    $optsToPass,
-                    $execState,
-                    $pg,
-                    $scope,
-                    $isSuper,
-                    function () {
-                        return true;
-                    },
-                    $logCollector,
-                    $errors
-                );
-                $logCollector->addInfo('Deferred statements executed: ' . count($stmts));
-            } catch (\Throwable $e) {
-                $errors++;
-                $logCollector->addError('Deferred execution failed: ' . $e->getMessage());
-            }
+            $roleActions = new RoleActions($pg);
+            $isSuper = $roleActions->isSuperUser();
+            ImportExecutor::executeStatementsBatch(
+                $stmts,
+                $optsToPass,
+                $execState,
+                $pg,
+                $scope,
+                $isSuper,
+                function () {
+                    return true;
+                },
+                $logCollector,
+                $errors
+            );
+            $logCollector->addInfo('Deferred statements executed: ' . count($stmts));
             AppContainer::set('quiet_sql_error_handling', false);
         };
 
@@ -344,8 +345,8 @@ function handle_process_chunk_stream(): void
             return new CopyStreamHandler($logCollector, $pg, $streamState, $options, $scope, $scopeIdent, is_string($schemaParam) ? $schemaParam : '');
         };
 
-        $metaCommands = [];
-
+        $items = [];
+        $shouldStop = false;
         // COPY streaming mode
         $copyTermPattern = "/\r?\n\\\.\r?\n/";
         if ($inCopy) {
@@ -363,15 +364,18 @@ function handle_process_chunk_stream(): void
                 } catch (CopyException $e) {
                     $errors++;
                     $logCollector->addError($e->getMessage());
+                    if ($options['stop_on_error']) {
+                        $shouldStop = true;
+                        $logCollector->addError('Import will stop due to COPY error (stop_on_error enabled)');
+                    }
                 }
                 // Clear COPY state and continue with remainder after terminator
                 $streamState['copy_active'] = false;
                 $streamState['copy_header'] = '';
                 $after = substr($decoded, $pos + strlen($m[0][0]));
                 $split = SqlParser::parseFromString($after, '', false, !empty($streamState['standard_conforming_strings']));
-                $statements = $split['statements'];
+                $items = $split['items'];
                 $remainder = $split['remainder'];
-                $metaCommands = $split['meta'] ?? [];
                 $streamState['standard_conforming_strings'] = !empty($split['standard_conforming_strings']);
             } else {
                 // No terminator yet: send only complete lines in this chunk
@@ -387,6 +391,10 @@ function handle_process_chunk_stream(): void
                     } catch (CopyException $e) {
                         $errors++;
                         $logCollector->addError($e->getMessage());
+                        if ($options['stop_on_error']) {
+                            $shouldStop = true;
+                            $logCollector->addError('Import will stop due to COPY error (stop_on_error enabled)');
+                        }
                     }
                     $remainder = $tail;
                 }
@@ -400,9 +408,8 @@ function handle_process_chunk_stream(): void
                 if (preg_match($copyTermPattern, $rest, $m, PREG_OFFSET_CAPTURE)) {
                     // Header and terminator both present in same chunk; let parser handle it fully
                     $split = SqlParser::parseFromString($decoded, '', false, !empty($streamState['standard_conforming_strings']));
-                    $statements = $split['statements'];
+                    $items = $split['items'];
                     $remainder = $split['remainder'];
-                    $metaCommands = $split['meta'] ?? [];
                     $streamState['standard_conforming_strings'] = !empty($split['standard_conforming_strings']);
                 } else {
                     // Activate COPY streaming and send complete lines from rest
@@ -419,6 +426,10 @@ function handle_process_chunk_stream(): void
                         } catch (CopyException $e) {
                             $errors++;
                             $logCollector->addError($e->getMessage());
+                            if ($options['stop_on_error']) {
+                                $shouldStop = true;
+                                $logCollector->addError('Import will stop due to COPY error (stop_on_error enabled)');
+                            }
                         }
                         $remainder = $tail;
                     }
@@ -426,63 +437,42 @@ function handle_process_chunk_stream(): void
             } else {
                 // Normal path: Parse statements using SqlParser with COPY and comment/meta handling
                 $split = SqlParser::parseFromString($decoded, '', false, !empty($streamState['standard_conforming_strings']));
-                $statements = $split['statements'];
+                $items = $split['items'];
                 $remainder = $split['remainder'];
-                $metaCommands = $split['meta'] ?? [];
                 $streamState['standard_conforming_strings'] = !empty($split['standard_conforming_strings']);
             }
         }
 
-        // Track meta-commands and session-level settings for this import session
-        if (!empty($metaCommands)) {
-            foreach ($metaCommands as $metaLine) {
-                $connDb = $parseConnectMeta($metaLine);
-                if ($connDb !== null) {
-                    $streamState['current_database'] = $connDb;
-                }
-                $enc = $parseEncodingMeta($metaLine);
-                if ($enc !== null) {
-                    $streamState['encoding'] = $enc;
-                }
+        // Helper function to switch database with deferred statement execution and settings re-application
+        $switchDatabase = function (string $dbName) use (&$pg, &$streamState, $executeDeferred, $settingsApplier, $misc, &$errors, $logCollector) {
+            if ($streamState['active_database'] === $dbName) {
+                return true; // Already on this database
             }
-        }
 
-        $settingsApplier->collectFromStatements($statements, $streamState);
-
-        // Determine which database to operate on: prefer meta \\connect, else request/home
-        $desiredDb = $streamState['current_database'];
-        if ($desiredDb === '' && isset($_REQUEST['database'])) {
-            $desiredDb = (string) $_REQUEST['database'];
-        }
-        if ($desiredDb === '' && $streamState['home_database'] !== '') {
-            $desiredDb = $streamState['home_database'];
-        }
-
-        if ($desiredDb !== '' && $streamState['active_database'] !== $desiredDb) {
-            // Execute deferred self-affecting statements before leaving the current database.
+            // Execute deferred self-affecting statements before leaving current database
             $executeDeferred();
+
             try {
-                $pgTarget = $misc->getDatabaseAccessor($desiredDb);
+                $pgTarget = $misc->getDatabaseAccessor($dbName);
                 if ($pgTarget !== null) {
                     $pg = $pgTarget;
                     AppContainer::setPostgres($pg);
-                    $streamState['active_database'] = $desiredDb;
+                    $streamState['active_database'] = $dbName;
+
+                    // Re-apply cached settings to new connection
+                    if (!empty($streamState['cached_settings'])) {
+                        $errors += $settingsApplier->applySettings($pg);
+                        $logCollector->addInfo('Re-applied ' . count($streamState['cached_settings']) . ' cached settings to database: ' . $dbName);
+                    }
+                    $streamState['last_applied_db'] = $dbName;
+                    return true;
                 }
             } catch (Throwable $e) {
-                http_response_code(500);
-                echo json_encode(['error' => 'Failed to connect to target database', 'detail' => $e->getMessage()]);
-                return;
+                $errors++;
+                $logCollector->addError('Failed to switch to database "' . $dbName . '": ' . $e->getMessage());
+                return false;
             }
-        }
-
-        // Apply cached SET statements once per database connection
-        if (!empty($streamState['cached_settings']) && $desiredDb !== '' && $streamState['last_applied_db'] !== $desiredDb) {
-            $errors += $settingsApplier->applySettings($pg);
-            $streamState['last_applied_db'] = $desiredDb;
-        }
-        if ($desiredDb !== '' && $streamState['active_database'] === '') {
-            $streamState['active_database'] = $desiredDb;
-        }
+        };
 
         // Compute offset advance based on source bytes read, not executed statements.
         // New bytes read = payload length minus client-prepended remainder.
@@ -493,20 +483,114 @@ function handle_process_chunk_stream(): void
         }
         $absoluteOffset = $baseOffset + $newBytesRead;
 
-        // Execute any non-COPY statements parsed in this chunk
-        if (!empty($statements)) {
-            if ($skipCount > 0 && count($statements) > 0) {
-                $statements = array_slice($statements, $skipCount);
+        // Initialize home database on first chunk
+        if ($baseOffset === 0 && $remainderLen === 0) {
+            if ($streamState['home_database'] === '') {
+                $streamState['home_database'] = $_REQUEST['database'] ?? ($serverInfo['database'] ?? '');
             }
-            try {
-                $runStatements($statements);
-                $logCollector->addInfo('Chunk processed: offset=' . $absoluteOffset . ' parsed=' . count($statements) . ' remainder=' . strlen($remainder));
-                if (strlen($remainder) > 10000) {
-                    $logCollector->addWarning('Large remainder detected: ' . strlen($remainder) . ' bytes. Preview: ' . substr($remainder, 0, 200));
+            if ($streamState['home_schema'] === '') {
+                $streamState['home_schema'] = $_REQUEST['schema'] ?? '';
+            }
+            if ($streamState['current_database'] === '') {
+                $streamState['current_database'] = $streamState['home_database'];
+            }
+            if ($streamState['active_database'] === '') {
+                $streamState['active_database'] = $streamState['home_database'];
+            }
+        }
+
+        // Process items sequentially: meta-commands affect subsequent statements
+        $itemsProcessed = 0;
+        if (!empty($items)) {
+            if ($skipCount > 0) {
+                // Skip items as requested (used for retry after error)
+                $items = array_slice($items, $skipCount);
+            }
+
+            // Track errors before processing to detect new errors in this chunk
+            $errorsBefore = $errors;
+
+            foreach ($items as $item) {
+                if ($item['type'] === 'meta') {
+                    // Process meta-command immediately
+                    $metaLine = $item['content'];
+
+                    // Handle \connect (unless ignored by option)
+                    if (empty($options['ignore_connect'])) {
+                        $connDb = $parseConnectMeta($metaLine);
+                        if ($connDb !== null) {
+                            $streamState['current_database'] = $connDb;
+                            $streamState['pending_database'] = $connDb;
+                            $logCollector->addInfo('Meta-command: \\connect ' . $connDb);
+                        }
+                    } else {
+                        // Check if this is a \connect command (for logging purposes)
+                        $connDb = $parseConnectMeta($metaLine);
+                        if ($connDb !== null) {
+                            $logCollector->addInfo('Meta-command: \\connect ' . $connDb . ' (ignored)');
+                        }
+                    }
+
+                    // Handle \encoding
+                    $enc = $parseEncodingMeta($metaLine);
+                    if ($enc !== null) {
+                        $streamState['encoding'] = $enc;
+                        // Cache encoding as SET statement for re-application
+                        $setEncoding = "SET client_encoding = '" . str_replace("'", "''", $enc) . "';";
+                        $settingsApplier->collectFromStatement($setEncoding, $streamState);
+                        $logCollector->addInfo('Meta-command: \\encoding ' . $enc);
+                    }
+
+                    $itemsProcessed++;
+                } elseif ($item['type'] === 'statement') {
+                    // Check if there's a pending database switch from meta-command
+                    if (
+                        !empty($streamState['pending_database']) &&
+                        $streamState['active_database'] !== $streamState['pending_database']
+                    ) {
+                        if (!$switchDatabase($streamState['pending_database'])) {
+                            // Failed to switch database: stop processing further statements
+                            $shouldStop = true;
+                            $logCollector->addFatal('Import stopped: failed to switch database to "' . $streamState['pending_database'] . '"');
+                            break;
+                        }
+                        $streamState['pending_database'] = ''; // Clear after switch
+                    }
+
+                    // Collect settings from this statement before executing
+                    // Returns false if statement should be skipped (unknown/unsupported SET command)
+                    $shouldExecute = $settingsApplier->collectFromStatement($item['content'], $streamState);
+
+                    // Execute the statement only if it wasn't skipped
+                    if ($shouldExecute) {
+                        try {
+                            $runStatements([$item['content']]);
+                            $itemsProcessed++;
+                        } catch (\Throwable $e) {
+                            // Error already counted in executeStatementsBatch
+                            $logCollector->addError('Statement execution failed: ' . $e->getMessage());
+                            // Exception thrown means stop_on_error was triggered
+                            if ($options['stop_on_error']) {
+                                break; // Stop processing remaining items in this chunk
+                            }
+                        }
+                    } else {
+                        // Statement was skipped (logged by collectFromStatement)
+                        $itemsProcessed++;
+                    }
                 }
-            } catch (\Throwable $e) {
-                $errors++;
-                $logCollector->addError('Execution error: ' . $e->getMessage());
+            }
+
+            // Check if errors occurred and stop_on_error is enabled
+            if ($options['stop_on_error'] && $errors > $errorsBefore) {
+                $shouldStop = true;
+                $errorCount = $errors - $errorsBefore;
+                $logCollector->addError('Import stopped: ' . $errorCount . ' SQL error(s) occurred in this chunk (stop_on_error enabled)');
+            }
+
+            $logCollector->addInfo('Chunk processed: offset=' . $absoluteOffset . ' items=' . $itemsProcessed . ' remainder=' . strlen($remainder));
+            if (strlen($remainder) > 10000) {
+                $logCollector->addWarning('Large remainder detected: ' . strlen($remainder) . ' bytes. Preview: ' . substr($remainder, 0, 200));
             }
         }
 
@@ -536,6 +620,7 @@ function handle_process_chunk_stream(): void
             'remainder_len' => strlen($remainder),
             'remainder' => $remainder,
             'errors' => $errors,
+            'stop' => $shouldStop,
             'logEntries' => $logCollector->getLogsWithSummary(),
         ]);
     } catch (Throwable $t) {

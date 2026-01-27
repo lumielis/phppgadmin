@@ -3,11 +3,11 @@
 namespace PhpPgAdmin\Database\Actions;
 
 use ADORecordSet;
-use PhpPgAdmin\Database\AppActions;
+
 use PhpPgAdmin\Database\QueryResult;
 
 
-class ScriptActions extends AppActions
+class ScriptActions extends ActionsBase
 {
 
     /**

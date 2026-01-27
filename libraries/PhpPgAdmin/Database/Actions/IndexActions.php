@@ -2,9 +2,9 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class IndexActions extends AppActions
+
+class IndexActions extends ActionsBase
 {
     // Base constructor inherited from Actions
     public const INDEX_TYPES = ['BTREE', 'HASH', 'GIST', 'GIN'];
@@ -16,8 +16,8 @@ class IndexActions extends AppActions
     {
         $this->connection->clean($table);
 
-        $sql = "
-            SELECT c2.relname AS indname, i.indisprimary, i.indisunique, i.indisclustered,
+        $sql =
+            "SELECT c2.relname AS indname, i.indisprimary, i.indisunique, i.indisclustered,
                 pg_catalog.pg_get_indexdef(i.indexrelid, 0, true) AS inddef
             FROM pg_catalog.pg_class c, pg_catalog.pg_class c2, pg_catalog.pg_index i
             WHERE c.relname = '{$table}' AND pg_catalog.pg_table_is_visible(c.oid)

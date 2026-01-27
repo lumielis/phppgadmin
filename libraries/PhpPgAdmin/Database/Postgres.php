@@ -4,9 +4,12 @@ namespace PhpPgAdmin\Database;
 
 use ADORecordSet;
 
-class Postgres extends AppConnection
+class Postgres extends PgBase
 {
-	// PostgreSQL-specific constants and metadata
+	/**
+	 * Server major version
+	 * @var float
+	 */
 	public $major_version = 0.0;
 	public $platform = 'PostgreSQL';
 
@@ -626,6 +629,11 @@ class Postgres extends AppConnection
 		return $this->endTransaction();
 	}
 
+	public function getMajorVersion(): float
+	{
+		return $this->major_version;
+	}
+
 	// Capabilities
 
 	function hasAlterSequenceSchema()
@@ -707,22 +715,12 @@ class Postgres extends AppConnection
 		return true;
 	}
 
-	function hasPrepare()
-	{
-		return true;
-	}
-
 	function hasPreparedXacts()
 	{
 		return true;
 	}
 
 	function hasReadOnlyQueries()
-	{
-		return true;
-	}
-
-	function hasRecluster()
 	{
 		return true;
 	}
@@ -774,11 +772,6 @@ class Postgres extends AppConnection
 	}
 
 	function hasDatabaseCollation()
-	{
-		return true;
-	}
-
-	function hasMagicTypes()
 	{
 		return true;
 	}

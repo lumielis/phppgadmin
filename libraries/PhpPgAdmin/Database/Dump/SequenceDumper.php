@@ -54,6 +54,18 @@ class SequenceDumper extends ExportDumper
             $this->write("\nCOMMENT ON SEQUENCE {$schemaQuoted}.{$sequenceQuoted} IS '{$comment}';\n");
         }
 
+        // Defer sequence ownership to be applied after all tables are dumped
+        if (!empty($rs->fields['owned_table']) && !empty($rs->fields['owned_column'])) {
+            if ($this->parentDumper && method_exists($this->parentDumper, 'addDeferredSequenceOwnership')) {
+                $this->parentDumper->addDeferredSequenceOwnership(
+                    $schema,
+                    $sequence,
+                    $rs->fields['owned_table'],
+                    $rs->fields['owned_column']
+                );
+            }
+        }
+
         $this->writePrivileges(
             $sequence,
             'sequence',

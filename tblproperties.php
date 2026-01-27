@@ -132,7 +132,9 @@ function doAlter($msg = '')
 	<form action="tblproperties.php" method="post">
 		<table>
 			<tr>
-				<th class="data left required"><?= $lang['strname'] ?></th>
+				<th class="data left required">
+					<?= $lang['strname'] ?>
+				</th>
 				<td class="data1">
 					<input name="name" size="32" maxlength="<?= $pg->_maxNameLen ?>"
 						value="<?= html_esc($_POST['name'], ENT_QUOTES) ?>" />
@@ -141,11 +143,15 @@ function doAlter($msg = '')
 
 			<?php if ($roleActions->isSuperUser()): ?>
 				<tr>
-					<th class="data left required"><?= $lang['strowner'] ?></th>
+					<th class="data left required">
+						<?= $lang['strowner'] ?>
+					</th>
 					<td class="data1"><select name="owner">
 							<?php while (!$users->EOF):
 								$uname = $users->fields['usename']; ?>
-								<option value="<?= html_esc($uname) ?>" <?= ($uname == $_POST['owner']) ? ' selected="selected"' : '' ?>><?= html_esc($uname) ?></option>
+								<option value="<?= html_esc($uname) ?>" <?= ($uname == $_POST['owner']) ? ' selected="selected"' : '' ?>>
+									<?= html_esc($uname) ?>
+								</option>
 								<?php $users->moveNext(); endwhile; ?>
 						</select></td>
 				</tr>
@@ -154,11 +160,15 @@ function doAlter($msg = '')
 			<?php if ($pg->hasAlterTableSchema()): ?>
 				<?php $schemas = $schemaActions->getSchemas(); ?>
 				<tr>
-					<th class="data left required"><?= $lang['strschema'] ?></th>
+					<th class="data left required">
+						<?= $lang['strschema'] ?>
+					</th>
 					<td class="data1"><select name="newschema">
 							<?php while (!$schemas->EOF):
 								$schema = $schemas->fields['nspname']; ?>
-								<option value="<?= html_esc($schema) ?>" <?= ($schema == $_POST['newschema']) ? ' selected="selected"' : '' ?>><?= html_esc($schema) ?></option>
+								<option value="<?= html_esc($schema) ?>" <?= ($schema == $_POST['newschema']) ? ' selected="selected"' : '' ?>>
+									<?= html_esc($schema) ?>
+								</option>
 								<?php $schemas->moveNext(); endwhile; ?>
 						</select></td>
 				</tr>
@@ -166,13 +176,18 @@ function doAlter($msg = '')
 
 			<?php if ($pg->hasTablespaces() && $tablespaces->recordCount() > 0): ?>
 				<tr>
-					<th class="data left"><?= $lang['strtablespace'] ?></th>
+					<th class="data left">
+						<?= $lang['strtablespace'] ?>
+					</th>
 					<td class="data1">
 						<select name="tablespace">
 							<option value="" <?= ($_POST['tablespace'] == '') ? ' selected="selected"' : '' ?>></option>
 							<?php while (!$tablespaces->EOF):
 								$spcname = html_esc($tablespaces->fields['spcname']); ?>
-								<option value="<?= $spcname ?>" <?= ($spcname == $_POST['tablespace']) ? ' selected="selected"' : '' ?>><?= $spcname ?></option>
+								<option value="<?= $spcname ?>" <?= ($spcname == $_POST['tablespace']) ? ' selected="selected"' : '' ?>
+									>
+									<?= $spcname ?>
+								</option>
 								<?php $tablespaces->moveNext(); endwhile; ?>
 						</select>
 					</td>
@@ -180,7 +195,9 @@ function doAlter($msg = '')
 			<?php endif; ?>
 
 			<tr>
-				<th class="data left"><?= $lang['strcomment'] ?></th>
+				<th class="data left">
+					<?= $lang['strcomment'] ?>
+				</th>
 				<td class="data1">
 					<textarea rows="3" cols="32" name="comment"><?= html_esc($_POST['comment'] ?? '') ?></textarea>
 				</td>
@@ -411,14 +428,17 @@ function doDrop($confirm)
 		$misc->printTrail('column');
 		$misc->printTitle($lang['strdrop'], 'pg.column.drop');
 		?>
-		<p><?= sprintf($lang['strconfdropcolumn'], $misc->printVal($_REQUEST['column']), $misc->printVal($_REQUEST['table'])) ?>
+		<p>
+			<?= sprintf($lang['strconfdropcolumn'], $misc->printVal($_REQUEST['column']), $misc->printVal($_REQUEST['table'])) ?>
 		</p>
 		<form action="tblproperties.php" method="post">
 			<input type="hidden" name="action" value="drop" />
 			<input type="hidden" name="table" value="<?= html_esc($_REQUEST['table']) ?>" />
 			<input type="hidden" name="column" value="<?= html_esc($_REQUEST['column']) ?>" />
 			<?= $misc->form ?>
-			<p><input type="checkbox" id="cascade" name="cascade"> <label for="cascade"><?= $lang['strcascade'] ?></label></p>
+			<p><input type="checkbox" id="cascade" name="cascade"> <label for="cascade">
+					<?= $lang['strcascade'] ?>
+				</label></p>
 			<input type="submit" name="drop" value="<?= $lang['strdrop'] ?>" />
 			<input type="submit" name="cancel" value="<?= $lang['strcancel'] ?>" />
 		</form>
@@ -515,7 +535,9 @@ function doDefault($msg = '')
 	// Show comment if any
 	if ($tdata->fields['relcomment'] !== null) {
 		?>
-		<p class="comment"><?= $misc->printVal($tdata->fields['relcomment']) ?></p>
+		<p class="comment">
+			<?= $misc->printVal($tdata->fields['relcomment']) ?>
+		</p>
 		<?php
 	}
 
@@ -541,6 +563,7 @@ function doDefault($msg = '')
 		'default' => [
 			'title' => $lang['strdefault'],
 			'field' => field('adsrc'),
+			'type' => 'sql-viewer',
 		],
 		'keyprop' => [
 			'title' => $lang['strconstraints'],
@@ -974,11 +997,14 @@ function doDropMultiple($confirm)
 		$misc->printTitle($lang['strdrop'], 'pg.column.drop');
 
 		?>
-		<p><?= sprintf($lang['strconfdropcolumns'] ?? 'Are you sure you want to drop the selected %d column(s) from table %s?', count($selectedColumns), $misc->printVal($_REQUEST['table'])) ?>
+		<p>
+			<?= sprintf($lang['strconfdropcolumns'] ?? 'Are you sure you want to drop the selected %d column(s) from table %s?', count($selectedColumns), $misc->printVal($_REQUEST['table'])) ?>
 		</p>
 		<ul>
 			<?php foreach ($selectedColumns as $colname): ?>
-				<li><?= $misc->printVal($colname) ?></li>
+				<li>
+					<?= $misc->printVal($colname) ?>
+				</li>
 			<?php endforeach; ?>
 		</ul>
 		<form action="tblproperties.php" method="post">
@@ -988,7 +1014,9 @@ function doDropMultiple($confirm)
 				<input type="hidden" name="column[]" value="<?= html_esc($colname) ?>" />
 			<?php endforeach; ?>
 			<?= $misc->form ?>
-			<p><input type="checkbox" id="cascade" name="cascade"> <label for="cascade"><?= $lang['strcascade'] ?></label></p>
+			<p><input type="checkbox" id="cascade" name="cascade"> <label for="cascade">
+					<?= $lang['strcascade'] ?>
+				</label></p>
 			<input type="submit" name="drop" value="<?= $lang['strdrop'] ?>" />
 			<input type="submit" name="cancel" value="<?= $lang['strcancel'] ?>" />
 		</form>

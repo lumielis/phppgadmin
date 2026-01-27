@@ -178,7 +178,7 @@ class FormRenderer extends AppContext
 	{
 		static $function_def = <<<EOT
 Date/Time
-CURRENT_DATE, CURRENT_TIME, NOW (), DATE_TRUNC (value), AGE (value), TO_CHAR (value), TO_DATE (value), INTERVAL
+CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, DATE_TRUNC (value), AGE (value), TO_CHAR (value), TO_DATE (value), INTERVAL
 Strings/Text
 LENGTH (value), CHAR_LENGTH (value), LOWER (value), UPPER (value), TRIM (value), LTRIM (value), RTRIM (value), MD5 (value), ENCODE (value,'base64'), ENCODE (value,'escape'), ENCODE (value,'hex'), DECODE (value,'base64'), DECODE (value,'escape'), DECODE (value,'hex')
 Math
@@ -225,13 +225,20 @@ EOT;
 		foreach ($extras as $k => $v) {
 			$extra_str .= " {$k}=\"" . htmlspecialchars($v ?? '') . "\"";
 		}
+		if ($value === 'CURRENT_TIMESTAMP') {
+			$value2 = 'NOW ()';
+		} elseif ($value === 'NOW ()') {
+			$value2 = 'CURRENT_TIMESTAMP';
+		} else {
+			$value2 = '';
+		}
 
 		echo "<select $extra_str name=\"", htmlspecialchars($name), "\">\n";
 		echo "<option value=\"\" class=\"placeholder\">", htmlspecialchars($lang['strchoosefunction']), "</option>\n";
 		foreach ($functions_by_category as $category => $functions) {
 			echo "<optgroup label=\"", htmlspecialchars($category), "\">\n";
 			foreach ($functions as $function) {
-				$selected = $value == $function ? " selected" : "";
+				$selected = $value == $function || $value2 == $function ? " selected" : "";
 				$function_html = htmlspecialchars($function);
 				echo "<option value=\"$function_html\"{$selected}>$function_html</option>\n";
 			}

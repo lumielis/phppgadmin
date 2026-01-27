@@ -36,6 +36,15 @@ function Error_Handler($dbms, $fn, $errno, $errmsg, $p1 = false, $p2 = false)
 		return;
 	}
 
+	// Throw exception if requested
+	if (AppContainer::get('throw_on_sql_error', false)) {
+		if (str_ends_with($fn, 'CONNECT')) {
+			$p1 = "host=$p1";
+			$p2 = "database=$p2";
+		}
+		throw new \Exception("[$dbms][$errno] $errmsg in $fn($p1, $p2)");
+	}
+
 	$lang = AppContainer::getLang();
 	$misc = AppContainer::getMisc();
 

@@ -52,6 +52,11 @@ class ExecutionLog
         return new self('success', $message, $statement);
     }
 
+    public static function fatal(string $message, ?string $statement = null, ?int $errorCode = null): self
+    {
+        return new self('fatal', $message, $statement, null, null, $errorCode);
+    }
+
     public static function error(string $message, ?string $statement = null, ?int $errorCode = null): self
     {
         return new self('error', $message, $statement, null, null, $errorCode);

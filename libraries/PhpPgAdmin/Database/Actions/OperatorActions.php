@@ -2,9 +2,9 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class OperatorActions extends AppActions
+
+class OperatorActions extends ActionsBase
 {
 
     /**

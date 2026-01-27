@@ -2,17 +2,17 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class SqlFunctionActions extends AppActions
+
+class FunctionActions extends ActionsBase
 {
 
     // Function properties
-	public $funcprops = [
-		['', 'VOLATILE', 'IMMUTABLE', 'STABLE'],
+    public $funcprops = [
+        ['', 'VOLATILE', 'IMMUTABLE', 'STABLE'],
         ['', 'CALLED ON NULL INPUT', 'RETURNS NULL ON NULL INPUT'],
-		['', 'SECURITY INVOKER', 'SECURITY DEFINER']
-	];
+        ['', 'SECURITY INVOKER', 'SECURITY DEFINER']
+    ];
 
     /**
      * Returns all details for a particular function.
@@ -57,7 +57,7 @@ class SqlFunctionActions extends AppActions
             $distinct = 'DISTINCT ON (p.proname)';
 
             if ($type) {
-                $where .= " AND p.prorettype = (select oid from pg_catalog.pg_type p where p.typname = 'trigger') ";
+                $where .= " AND p.prorettype = (SELECT oid FROM pg_catalog.pg_type t WHERE t.typname = 'trigger')";
             }
         } else {
             $c_schema = $this->connection->_schema;
@@ -66,8 +66,32 @@ class SqlFunctionActions extends AppActions
             $distinct = '';
         }
 
-        $sql = "
-            SELECT
+        // --- Version dependend fields ---
+        if ($this->connection->major_version >= 11) {
+            // PostgreSQL 11+
+            $notAgg = "p.prokind <> 'a'";
+            $protype = "
+                CASE p.prokind
+                    WHEN 'a' THEN 'agg'
+                    WHEN 'w' THEN 'window'
+                    WHEN 'p' THEN 'proc'
+                    ELSE 'func'
+                END
+            ";
+        } else {
+            // PostgreSQL 9.0–10
+            $notAgg = "NOT p.proisagg";
+            $protype = "
+                CASE
+                    WHEN p.proisagg THEN 'agg'
+                    WHEN p.proiswindow THEN 'window'
+                    ELSE 'func'
+                END
+            ";
+        }
+
+        $sql =
+            "SELECT
                 {$distinct}
                 p.oid AS prooid,
                 p.proname,
@@ -77,22 +101,19 @@ class SqlFunctionActions extends AppActions
                 pl.lanname AS prolanguage,
                 pg_catalog.obj_description(p.oid, 'pg_proc') AS procomment,
                 p.proname || ' (' || pg_catalog.oidvectortypes(p.proargtypes) || ')' AS proproto,
-                CASE WHEN p.proretset THEN 'setof ' ELSE '' END || pg_catalog.format_type(p.prorettype, NULL) AS proreturns,
+                CASE WHEN p.proretset THEN 'setof ' ELSE '' END
+                    || pg_catalog.format_type(p.prorettype, NULL) AS proreturns,
                 u.usename AS proowner,
-                CASE p.prokind
-                    WHEN 'a' THEN 'agg'
-                    WHEN 'w' THEN 'window'
-                    WHEN 'p' THEN 'proc'
-                    ELSE 'func'
-                 END as protype
+                {$protype} AS protype
             FROM pg_catalog.pg_proc p
                 INNER JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
                 INNER JOIN pg_catalog.pg_language pl ON pl.oid = p.prolang
                 LEFT JOIN pg_catalog.pg_user u ON u.usesysid = p.proowner
-            WHERE NOT p.prokind = 'a' 
+            WHERE
+                {$notAgg}
                 AND {$where}
             ORDER BY p.proname, proresult
-            ";
+        ";
 
         return $this->connection->selectSet($sql);
     }
@@ -292,24 +313,24 @@ class SqlFunctionActions extends AppActions
         return $this->connection->execute($sql);
     }
 
-	function hasFunctionAlterOwner()
-	{
-		return true;
-	}
+    function hasFunctionAlterOwner()
+    {
+        return true;
+    }
 
-	function hasFunctionAlterSchema()
-	{
-		return true;
-	}
+    function hasFunctionAlterSchema()
+    {
+        return true;
+    }
 
-	function hasFunctionCosting()
-	{
-		return true;
-	}
+    function hasFunctionCosting()
+    {
+        return true;
+    }
 
-	function hasFunctionGUC()
-	{
-		return true;
-	}
+    function hasFunctionGUC()
+    {
+        return true;
+    }
 
 }

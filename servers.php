@@ -65,7 +65,8 @@ function doDefault($msg = '')
 	$servers = $misc->getServers(true, $group);
 
 	$svPre = function (&$rowdata, $actions) {
-		$actions['logout']['disable'] = empty($rowdata->fields['username']) || ($rowdata->fields['auth_type'] ?? 'cookie') !== 'cookie';
+		$authType = $rowdata->fields['auth_type'] ?? '';
+		$actions['logout']['disable'] = empty($rowdata->fields['username']) || $authType == 'http' || $authType == 'config';
 		return $actions;
 	};
 

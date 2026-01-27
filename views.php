@@ -173,7 +173,9 @@ function doSetParamsCreate($msg = '')
 		<form action="views.php" method="post">
 			<table>
 				<tr>
-					<th class="data"><?= $lang['strviewname'] ?></th>
+					<th class="data">
+						<?= $lang['strviewname'] ?>
+					</th>
 				</tr>
 				<tr>
 					<td class="data1">
@@ -182,7 +184,9 @@ function doSetParamsCreate($msg = '')
 					</td>
 				</tr>
 				<tr>
-					<th class="data"><?= $lang['strcomment'] ?></th>
+					<th class="data">
+						<?= $lang['strcomment'] ?>
+					</th>
 				</tr>
 				<tr>
 					<td class="data1">
@@ -193,7 +197,9 @@ function doSetParamsCreate($msg = '')
 
 			<table>
 				<tr>
-					<th class="data"><?= $lang['strcolumns'] ?></th>
+					<th class="data">
+						<?= $lang['strcolumns'] ?>
+					</th>
 				</tr>
 				<tr>
 					<td class="data1">
@@ -202,14 +208,18 @@ function doSetParamsCreate($msg = '')
 				</tr>
 				<tr>
 					<td>
-						<input type="radio" name="dblFldMeth" id="dblFldMeth1" value="rename" />&nbsp;<label
-							for="dblFldMeth1"><?= $lang['strrenamedupfields'] ?></label>
+						<input type="radio" name="dblFldMeth" id="dblFldMeth1" value="rename" />&nbsp;<label for="dblFldMeth1">
+							<?= $lang['strrenamedupfields'] ?>
+						</label>
 						<br />
-						<input type="radio" name="dblFldMeth" id="dblFldMeth2" value="drop" />&nbsp;<label
-							for="dblFldMeth2"><?= $lang['strdropdupfields'] ?></label>
+						<input type="radio" name="dblFldMeth" id="dblFldMeth2" value="drop" />&nbsp;<label for="dblFldMeth2">
+							<?= $lang['strdropdupfields'] ?>
+						</label>
 						<br />
 						<input type="radio" name="dblFldMeth" id="dblFldMeth3" value="" checked="checked" />&nbsp;<label
-							for="dblFldMeth3"><?= $lang['strerrordupfields'] ?></label>
+							for="dblFldMeth3">
+							<?= $lang['strerrordupfields'] ?>
+						</label>
 					</td>
 				</tr>
 			</table>
@@ -217,7 +227,9 @@ function doSetParamsCreate($msg = '')
 
 			<table>
 				<tr>
-					<th class="data"><?= $lang['strviewlink'] ?></th>
+					<th class="data">
+						<?= $lang['strviewlink'] ?>
+					</th>
 				</tr>
 				<?php
 				$rowClass = 'data1';
@@ -259,7 +271,9 @@ function doSetParamsCreate($msg = '')
 
 			<table>
 				<tr>
-					<th class="data"><?= $lang['strviewconditions'] ?></th>
+					<th class="data">
+						<?= $lang['strviewconditions'] ?>
+					</th>
 				</tr>
 				<?php
 				$rowClass = 'data1';
@@ -320,7 +334,9 @@ function doWizardCreate($msg = '')
 	<form action="views.php" method="post">
 		<table>
 			<tr>
-				<th class="data"><?= $lang['strtables'] ?></th>
+				<th class="data">
+					<?= $lang['strtables'] ?>
+				</th>
 			</tr>
 			<tr>
 				<td class="data1">
@@ -367,17 +383,23 @@ function doCreate($msg = '')
 		<table style="width: 100%">
 			<tr>
 
-				<th class="data left required"><?= $lang['strname'] ?></th>
+				<th class="data left required">
+					<?= $lang['strname'] ?>
+				</th>
 				<td class="data1"><input name="formView" size="32" maxlength="<?= $pg->_maxNameLen ?>"
 						value="<?= html_esc($_REQUEST['formView']) ?>" /></td>
 			</tr>
 			<tr>
-				<th class="data left required"><?= $lang['strdefinition'] ?></th>
+				<th class="data left required">
+					<?= $lang['strdefinition'] ?>
+				</th>
 				<td class="data1"><textarea style="width:100%;" rows="10" cols="50"
 						name="formDefinition"><?= html_esc($_REQUEST['formDefinition']) ?></textarea></td>
 			</tr>
 			<tr>
-				<th class="data left"><?= $lang['strcomment'] ?></th>
+				<th class="data left">
+					<?= $lang['strcomment'] ?>
+				</th>
 				<td class="data1"><textarea name="formComment" rows="3"
 						cols="32"><?= html_esc($_REQUEST['formComment']) ?></textarea></td>
 			</tr>
@@ -661,6 +683,14 @@ function doDefault($msg = '')
 		],
 	];
 
+	$isCatalog = $misc->isCatalogSchema();
+	if ($isCatalog) {
+		$actions = array_intersect_key(
+			$actions,
+			array_flip(['browse', 'select'])
+		);
+	}
+
 	$misc->printTable($views, $columns, $actions, 'views-views', $lang['strnoviews']);
 
 	$navlinks = [
@@ -695,7 +725,9 @@ function doDefault($msg = '')
 			'content' => $lang['strcreateviewwiz']
 		]
 	];
-	$misc->printNavLinks($navlinks, 'views-views', get_defined_vars());
+	if (!$isCatalog) {
+		$misc->printNavLinks($navlinks, 'views-views', get_defined_vars());
+	}
 }
 
 /**

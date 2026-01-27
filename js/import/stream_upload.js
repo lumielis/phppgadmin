@@ -36,7 +36,7 @@ async function startStreamUpload() {
 	}
 	let file = fileInput.files[0];
 	const hash = fnv1a64(
-		utf8Encode(file.name + "|" + file.size + "|" + file.lastModified)
+		utf8Encode(file.name + "|" + file.size + "|" + file.lastModified),
 	);
 
 	// Stable per-import session key so multiple uploads can run in parallel.
@@ -48,12 +48,12 @@ async function startStreamUpload() {
 	const isCompressed =
 		magic === "gzip" || magic === "bzip2" || magic === "zip";
 	console.log(
-		`File format: ${magic}${isCompressed ? " (will decompress)" : ""}`
+		`File format: ${magic}${isCompressed ? " (will decompress)" : ""}`,
 	);
 
 	// Check if chunk compression is enabled
 	const compressChunks = !!document.querySelector(
-		"input[name='opt_compress_chunks']"
+		"input[name='opt_compress_chunks']",
 	)?.checked;
 
 	const scope = el("import_scope")?.value || "database";
@@ -73,6 +73,8 @@ async function startStreamUpload() {
 		"opt_defer_self",
 		"opt_allow_drops",
 		"opt_stop_on_error",
+		"opt_ignore_connect",
+		"opt_verbose",
 		"use_header",
 		"include_schema_objects",
 		"export_all_objects",
@@ -88,7 +90,7 @@ async function startStreamUpload() {
 		opts.format = importForm.format?.value ?? "csv";
 		opts.allowed_nulls = [];
 		const nullInputs = importForm.querySelectorAll(
-			"input[name^='allowed_nulls']"
+			"input[name^='allowed_nulls']",
 		);
 		nullInputs.forEach((inp) => {
 			if (inp.checked) opts.allowed_nulls.push(inp.value);
@@ -195,7 +197,7 @@ async function startStreamUpload() {
 		params.set("offset", String(offset));
 		params.set(
 			"remainder_len",
-			String(remainder ? utf8Encode(remainder).length : 0)
+			String(remainder ? utf8Encode(remainder).length : 0),
 		);
 		if (chunkCompressed) params.set("compressed", "1");
 		if (isFinal) params.set("eof", "1");
@@ -214,7 +216,7 @@ async function startStreamUpload() {
 
 		const urlBase = importForm.dataset.action;
 		const url = appendServerToUrl(
-			`${urlBase}?action=process_chunk&${params.toString()}`
+			`${urlBase}?action=process_chunk&${params.toString()}`,
 		);
 
 		// Retry loop with exponential backoff
@@ -246,7 +248,7 @@ async function startStreamUpload() {
 				// Success - break out of retry loop
 				if (retryCount > 0) {
 					console.log(
-						`Chunk sent successfully after ${retryCount} retries`
+						`Chunk sent successfully after ${retryCount} retries`,
 					);
 				}
 				return res;
@@ -268,13 +270,13 @@ async function startStreamUpload() {
 				// Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (capped)
 				const delay = Math.min(
 					1000 * Math.pow(2, Math.min(retryCount - 1, 5)),
-					maxRetryDelay
+					maxRetryDelay,
 				);
 
 				const msg = `${errorType} error: ${
 					err.message
 				}. Retrying in ${Math.round(
-					delay / 1000
+					delay / 1000,
 				)}s (attempt ${retryCount})...`;
 				console.warn(msg);
 
@@ -315,9 +317,22 @@ async function startStreamUpload() {
 			for (const e of res.logEntries) {
 				const msg = e.message || e.statement || "";
 				if (msg && typeof msg === "string") {
-					logImport(msg, e.type || "info", e.time);
+					logImport(msg, e.type || "info", e.time, e);
 				}
 			}
+		}
+
+		// Check if server requests stop (SQL errors with stop_on_error enabled)
+		if (res.stop === true) {
+			if (importStopBtn) importStopBtn.style.display = "none";
+			stopRequested = true;
+			logImport(
+				"Import halted by server due to SQL errors (stop_on_error enabled) or a fatal error.",
+				"error",
+			);
+			throw new Error(
+				"Import stopped due to SQL errors (stop_on_error enabled) or a fatal error.",
+			);
 		}
 	}
 
@@ -357,11 +372,11 @@ async function startStreamUpload() {
 				if (importProgress)
 					importProgress.value = Math.min(
 						100,
-						Math.floor((bytesRead / file.size) * 100)
+						Math.floor((bytesRead / file.size) * 100),
 					);
 				if (importStatus)
 					importStatus.textContent = `Processed ${formatBytes(
-						bytesRead
+						bytesRead,
 					)} / ${formatBytes(file.size)}`;
 			}
 
@@ -411,13 +426,13 @@ async function startStreamUpload() {
 			if (readerErr) throw readerErr;
 			if (decompressionError)
 				throw new Error(
-					`Decompression failed: ${decompressionError.message}`
+					`Decompression failed: ${decompressionError.message}`,
 				);
 		}
 
 		// Upload completed successfully
 		logImport(
-			`Upload completed successfully (${totalRetries} total retries).`
+			`Upload completed successfully (${totalRetries} total retries).`,
 		);
 		console.log("Upload completed successfully.");
 	} catch (err) {

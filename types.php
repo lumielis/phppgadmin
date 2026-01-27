@@ -2,7 +2,7 @@
 
 use PhpPgAdmin\Core\AppContainer;
 use PhpPgAdmin\Database\Actions\RoleActions;
-use PhpPgAdmin\Database\Actions\SqlFunctionActions;
+use PhpPgAdmin\Database\Actions\FunctionActions;
 use PhpPgAdmin\Database\Actions\TableActions;
 use PhpPgAdmin\Database\Actions\TypeActions;
 
@@ -681,7 +681,7 @@ function doCreateBase($msg = '')
 	$misc = AppContainer::getMisc();
 	$lang = AppContainer::getLang();
 	$typeActions = new TypeActions($pg);
-	$fncActions = new SqlFunctionActions($pg);
+	$fncActions = new FunctionActions($pg);
 
 	if (!isset($_POST['typname']))
 		$_POST['typname'] = '';

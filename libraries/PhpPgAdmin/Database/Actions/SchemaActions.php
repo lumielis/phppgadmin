@@ -2,30 +2,35 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class SchemaActions extends AppActions
+
+class SchemaActions extends ActionsBase
 {
     /**
      * Return all schemas in the current database.
-     * @param bool|null $showSystem whether to include system schemas; if null,
+     * Always excludes system catalogs (pg_catalog, information_schema) as they are shown separately.
+     * @param bool|null $showSystem whether to include other system schemas (pg_toast, pg_temp); if null,
      * use global setting
      */
-    public function getSchemas(bool $showSystem = null)
+    public function getSchemas(?bool $showSystem = null)
     {
         $conf = $this->conf();
 
         if ($showSystem === null) {
             $showSystem = $conf['show_system'];
         }
+
+        // Always exclude pg_catalog and information_schema (shown in Catalogs section)
         if (!$showSystem) {
             // Only user-defined schemas
             $where = "WHERE pn.nspname NOT LIKE 'pg_%'
                   AND pn.nspname <> 'information_schema'";
         } else {
-            // All except temporary and toast schemas
+            // All except temporary, toast schemas, and system catalogs
             $where = "WHERE pn.nspname NOT LIKE 'pg_temp%'
-                  AND pn.nspname NOT LIKE 'pg_toast%'";
+                  AND pn.nspname NOT LIKE 'pg_toast%'
+                  AND pn.nspname <> 'pg_catalog'
+                  AND pn.nspname <> 'information_schema'";
         }
 
         $sql =
@@ -34,6 +39,23 @@ class SchemaActions extends AppActions
             FROM pg_catalog.pg_namespace pn
             LEFT JOIN pg_catalog.pg_roles pu ON (pn.nspowner = pu.oid)
             {$where}
+            ORDER BY nspname";
+
+        return $this->connection->selectSet($sql);
+    }
+
+    /**
+     * Return only system catalog schemas (pg_catalog and information_schema).
+     * These are always shown regardless of show_system setting.
+     */
+    public function getCatalogSchemas()
+    {
+        $sql =
+            "SELECT pn.nspname, pu.rolname AS nspowner, pn.oid,
+                pg_catalog.obj_description(pn.oid, 'pg_namespace') AS nspcomment
+            FROM pg_catalog.pg_namespace pn
+            LEFT JOIN pg_catalog.pg_roles pu ON (pn.nspowner = pu.oid)
+            WHERE pn.nspname = 'pg_catalog' OR pn.nspname = 'information_schema'
             ORDER BY nspname";
 
         return $this->connection->selectSet($sql);
@@ -71,6 +93,9 @@ class SchemaActions extends AppActions
      */
     public function setSchema($schema)
     {
+        if (empty($schema)) {
+            return -1;
+        }
         $search_path = $this->getSearchPath();
         $schema_by_key = array_flip($search_path);
         if (!isset($schema_by_key[$schema])) {

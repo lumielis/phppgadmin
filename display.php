@@ -368,7 +368,14 @@ function doEditRow($confirm, $msg = '')
 				$value = $attrs->fields['adsrc'];
 				if (!empty($value)) {
 					$search = str_replace("()", " ()", strtoupper($value));
-					$function = $all_functions[$search] ?? null;
+					if ($search === 'NOW ()') {
+						$search2 = 'CURRENT_TIMESTAMP';
+					} elseif ($search === 'CURRENT_TIMESTAMP') {
+						$search2 = 'NOW ()';
+					} else {
+						$search2 = '';
+					}
+					$function = $all_functions[$search] ?? $all_functions[$search2] ?? null;
 					if (!empty($function)) {
 						// use function
 						$_REQUEST['format'][$attrs->fields['attname']] = $function;

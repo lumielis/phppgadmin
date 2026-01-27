@@ -3,13 +3,13 @@
 namespace PhpPgAdmin\Database\Actions;
 
 use ADORecordSet;
-use PhpPgAdmin\Database\AppActions;
+
 use PhpPgAdmin\Database\Actions\AclActions;
 use PhpPgAdmin\Database\Actions\ConstraintActions;
 use PhpPgAdmin\Database\Actions\IndexActions;
 use PhpPgAdmin\Database\Actions\RuleActions;
 
-class TableActions extends AppActions
+class TableActions extends ActionsBase
 {
     //public const 
 
@@ -188,6 +188,12 @@ class TableActions extends AppActions
             ? "AND a.attname = '{$field}'"
             : "AND a.attnum > 0 AND NOT a.attisdropped";
 
+        // Add attgenerated field for PostgreSQL 12+ (generated columns)
+        $attgeneratedField = '';
+        if ($this->connection->major_version >= 12) {
+            $attgeneratedField = "a.attgenerated,";
+        }
+
         $sql =
             "SELECT
                 a.attname,
@@ -197,10 +203,12 @@ class TableActions extends AppActions
                 a.atttypmod,
                 a.attnotnull,
                 a.atthasdef,
+                {$attgeneratedField}
                 pg_get_expr(ad.adbin, ad.adrelid, true) AS adsrc,
                 a.attstattarget,
                 a.attstorage,
                 t.typstorage,
+                seqns.nspname AS sequence_schema,
                 seq.relname AS sequence_name,
                 col_description(a.attrelid, a.attnum) AS comment
             FROM pg_attribute a
@@ -211,6 +219,7 @@ class TableActions extends AppActions
                                 AND d.deptype = 'a'
                                 AND d.classid = 'pg_class'::regclass
             LEFT JOIN pg_class seq ON seq.oid = d.objid AND seq.relkind = 'S'
+            LEFT JOIN pg_namespace seqns ON seq.relnamespace = seqns.oid
             WHERE a.attrelid = (
                 SELECT oid FROM pg_class
                 WHERE relname = '{$table}'

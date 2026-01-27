@@ -2,9 +2,9 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class ConstraintActions extends AppActions
+
+class ConstraintActions extends ActionsBase
 {
     public const FK_ACTIONS = ['NO ACTION', 'RESTRICT', 'CASCADE', 'SET NULL', 'SET DEFAULT'];
 
@@ -73,18 +73,15 @@ class ConstraintActions extends AppActions
                 pg_catalog.pg_get_constraintdef(c.oid, true) AS consrc,
                 c.contype,
 
-                -- Array of column names (primary/unique/check)
+                -- Array of column names
                 array_agg(a.attname ORDER BY a.attnum) AS columns,
 
-                -- Clustered index info (only for PK/UNIQUE)
-                CASE WHEN c.contype IN ('p','u') THEN (
-                    SELECT i.indisclustered
-                    FROM pg_catalog.pg_depend d
-                    JOIN pg_catalog.pg_class cl ON cl.oid = d.objid
-                    JOIN pg_catalog.pg_index i ON i.indexrelid = cl.oid
-                    WHERE d.refclassid = c.tableoid
-                    AND d.refobjid = c.oid
-                ) ELSE NULL END AS indisclustered
+                -- Clustered info (only for PK/UNIQUE)
+                i.indisclustered,
+
+                -- Referenced table schema and name (for FK)
+                ns2.nspname AS f_schema,
+                r2.relname AS f_table
 
             FROM pg_catalog.pg_constraint c
             JOIN pg_catalog.pg_class r
@@ -95,17 +92,30 @@ class ConstraintActions extends AppActions
             -- Resolve column names
             LEFT JOIN pg_catalog.pg_attribute a
                 ON a.attrelid = r.oid
-                AND a.attnum = ANY(c.conkey)
+                AND a.attnum = ANY (c.conkey)
+
+            -- Join index directly (only PK/UNIQUE have conindid)
+            LEFT JOIN pg_catalog.pg_index i
+                ON i.indexrelid = c.conindid
+
+            -- Referenced table (for FK)
+            LEFT JOIN pg_catalog.pg_class r2
+                ON r2.oid = c.confrelid
+            LEFT JOIN pg_catalog.pg_namespace ns2
+                ON ns2.oid = r2.relnamespace
 
             WHERE r.relname = '{$table}'
             AND n.nspname = '{$c_schema}'
 
-            GROUP BY c.oid, c.conname, c.contype
+            GROUP BY
+                c.oid, c.conname, c.contype, i.indisclustered, ns2.nspname, r2.relname
+
             ORDER BY c.conname
         ";
 
         return $this->connection->selectSet($sql);
     }
+
 
     /**
      * Returns a list of all constraints on a table with field details.

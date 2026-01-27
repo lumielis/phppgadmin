@@ -47,11 +47,11 @@ $conf['servers'][0]['defaultdb'] = 'template1';
 // $conf['servers'][0]['pg_dump_path'] = '/usr/bin/pg_dump';
 // $conf['servers'][0]['pg_dumpall_path'] = '/usr/bin/pg_dumpall';
 
-// Authentication type for this server (optional, default: 'cookie')
-// 'cookie' - Standard login form (default behavior)
+// Authentication type for this server (optional, default: 'form')
+// 'form'   - Standard login form (default behavior)
 // 'http'   - HTTP Basic Authentication
 // 'config' - Credentials stored in config (encrypted, requires encryption_key)
-// $conf['servers'][0]['auth_type'] = 'cookie';
+// $conf['servers'][0]['auth_type'] = 'form';
 
 // For 'http' auth: Credentials will be taken from HTTP Basic Auth headers
 // No username/password needed in config

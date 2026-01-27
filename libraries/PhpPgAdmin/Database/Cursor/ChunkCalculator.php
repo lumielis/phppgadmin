@@ -150,7 +150,7 @@ class ChunkCalculator
     public static function adaptChunkSize(
         int $currentChunkSize,
         int $bytesUsed,
-        int $targetBytes = null
+        ?int $targetBytes = null
     ): int {
         if ($targetBytes === null) {
             // Use midpoint between min and max target

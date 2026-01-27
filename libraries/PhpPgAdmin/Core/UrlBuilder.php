@@ -291,7 +291,7 @@ class UrlBuilder extends AppContext
     function printUrlVars($vars, $fields)
     {
         foreach ($vars as $var => $varfield) {
-            echo "{$var}=", urlencode($fields[$varfield]), "&amp;";
+            echo "{$var}=", urlencode($fields[$varfield] ?? ''), "&amp;";
         }
     }
 

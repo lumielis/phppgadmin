@@ -723,8 +723,13 @@ function doDefault($msg = '')
 		//'cluster' TODO ?
 	];
 
-	if (!$pg->hasTablespaces())
-		unset($columns['tablespace']);
+	$isCatalog = $misc->isCatalogSchema();
+	if ($isCatalog) {
+		$actions = array_intersect_key(
+			$actions,
+			array_flip(['browse', 'select'])
+		);
+	}
 
 	$misc->printTable($tables, $columns, $actions, 'tables-tables', $lang['strnotables']);
 
@@ -763,7 +768,10 @@ function doDefault($msg = '')
 			'content' => $lang['strcreatetablelike']
 		];
 	}
-	$misc->printNavLinks($navlinks, 'tables-tables', get_defined_vars());
+
+	if (!$isCatalog) {
+		$misc->printNavLinks($navlinks, 'tables-tables', get_defined_vars());
+	}
 }
 
 require('./admin.php');

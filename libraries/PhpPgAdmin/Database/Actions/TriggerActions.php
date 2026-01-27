@@ -2,10 +2,8 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
-use PhpPgAdmin\Database\Actions\SqlFunctionActions;
 
-class TriggerActions extends AppActions
+class TriggerActions extends ActionsBase
 {
     public $triggerEvents = [
         'INSERT',
@@ -21,14 +19,14 @@ class TriggerActions extends AppActions
     public $triggerFrequency = ['ROW', 'STATEMENT'];
 
 
-    /** @var SqlFunctionActions */
+    /** @var FunctionActions */
     private $functionAction;
 
 
     private function getFunctionAction()
     {
         if ($this->functionAction === null) {
-            $this->functionAction = new SqlFunctionActions($this->connection);
+            $this->functionAction = new FunctionActions($this->connection);
         }
 
         return $this->functionAction;

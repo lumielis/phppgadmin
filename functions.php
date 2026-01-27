@@ -4,7 +4,7 @@ use PhpPgAdmin\Core\AppContainer;
 use PhpPgAdmin\Database\Actions\LanguageActions;
 use PhpPgAdmin\Database\Actions\RoleActions;
 use PhpPgAdmin\Database\Actions\SchemaActions;
-use PhpPgAdmin\Database\Actions\SqlFunctionActions;
+use PhpPgAdmin\Database\Actions\FunctionActions;
 use PhpPgAdmin\Database\Actions\TypeActions;
 
 /**
@@ -25,7 +25,7 @@ function doSaveEdit()
 	$pg = AppContainer::getPostgres();
 	$lang = AppContainer::getLang();
 	$misc = AppContainer::getMisc();
-	$functionActions = new SqlFunctionActions($pg);
+	$functionActions = new FunctionActions($pg);
 
 	$fnlang = strtolower($_POST['original_lang']);
 
@@ -81,7 +81,7 @@ function doEdit($msg = '')
 	$pg = AppContainer::getPostgres();
 	$misc = AppContainer::getMisc();
 	$lang = AppContainer::getLang();
-	$functionActions = new SqlFunctionActions($pg);
+	$functionActions = new FunctionActions($pg);
 	$schemaActions = new SchemaActions($pg);
 	$roleActions = new RoleActions($pg);
 
@@ -294,7 +294,7 @@ function doProperties($msg = '')
 	$pg = AppContainer::getPostgres();
 	$misc = AppContainer::getMisc();
 	$lang = AppContainer::getLang();
-	$functionActions = new SqlFunctionActions($pg);
+	$functionActions = new FunctionActions($pg);
 
 	$misc->printTrail('function');
 	$misc->printTitle($lang['strproperties'], 'pg.function');
@@ -468,7 +468,7 @@ function doDrop($confirm)
 	$pg = AppContainer::getPostgres();
 	$misc = AppContainer::getMisc();
 	$lang = AppContainer::getLang();
-	$functionActions = new SqlFunctionActions($pg);
+	$functionActions = new FunctionActions($pg);
 
 	if (empty($_REQUEST['function']) && empty($_REQUEST['ma'])) {
 		doDefault($lang['strspecifyfunctiontodrop']);
@@ -546,7 +546,7 @@ function doCreate($msg = '', $szJS = "")
 	$lang = AppContainer::getLang();
 	$conf = AppContainer::getConf();
 	$typeActions = new TypeActions($pg);
-	$functionActions = new SqlFunctionActions($pg);
+	$functionActions = new FunctionActions($pg);
 	$languageActions = new LanguageActions($pg);
 
 	$misc->printTrail('schema');
@@ -784,7 +784,7 @@ function doSaveCreate()
 {
 	$pg = AppContainer::getPostgres();
 	$lang = AppContainer::getLang();
-	$functionActions = new SqlFunctionActions($pg);
+	$functionActions = new FunctionActions($pg);
 
 	$fnlang = strtolower($_POST['formLanguage']);
 
@@ -926,7 +926,7 @@ function doDefault($msg = '')
 	//$conf = AppContainer::getConf();
 	$misc = AppContainer::getMisc();
 	$lang = AppContainer::getLang();
-	$functionActions = new SqlFunctionActions($pg);
+	$functionActions = new FunctionActions($pg);
 
 	$misc->printTrail('schema');
 	$misc->printTabs('schema', 'functions');
@@ -1013,6 +1013,15 @@ function doDefault($msg = '')
 		],
 	];
 
+	$isCatalogSchema = $misc->isCatalogSchema();
+	if ($isCatalogSchema) {
+		$actions = array_intersect_key(
+			$actions,
+			array_flip(['privileges'])
+		);
+		unset($columns['actions']);
+	}
+
 	$misc->printTable($funcs, $columns, $actions, 'functions-functions', $lang['strnofunctions']);
 
 	$navlinks = [
@@ -1065,7 +1074,9 @@ function doDefault($msg = '')
 		]
 	];
 
-	$misc->printNavLinks($navlinks, 'functions-functions', get_defined_vars());
+	if (!$isCatalogSchema) {
+		$misc->printNavLinks($navlinks, 'functions-functions', get_defined_vars());
+	}
 }
 
 /**
@@ -1075,7 +1086,7 @@ function doTree()
 {
 	$misc = AppContainer::getMisc();
 	$pg = AppContainer::getPostgres();
-	$functionActions = new SqlFunctionActions($pg);
+	$functionActions = new FunctionActions($pg);
 
 	$funcs = $functionActions->getFunctions();
 

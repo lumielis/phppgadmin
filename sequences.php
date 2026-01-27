@@ -41,6 +41,13 @@ function doDefault($msg = '')
 			'icon' => $misc->icon('Sequence'),
 			'class' => 'nowrap',
 		],
+		'table' => [
+			'icon' => $misc->icon('Table'),
+			'title' => $lang['strtable'],
+			'field' => field('tablename'),
+			'url' => "tblproperties.php?{$misc->href}&amp;subject=table&amp;",
+			'vars' => ['table' => 'tablename'],
+		],
 		'owner' => [
 			'title' => $lang['strowner'],
 			'field' => field('seqowner'),

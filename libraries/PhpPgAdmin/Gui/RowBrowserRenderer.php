@@ -253,7 +253,7 @@ class RowBrowserRenderer extends AppContext
         $misc = AppContainer::getMisc();
         $typeActions = new TypeActions($pg);
         $metas = $this->getTypesMetaForRecordSet($rs);
-        $keys = array_keys($_REQUEST['orderby']);
+        $keys = array_keys($_REQUEST['orderby'] ?? []);
 
         $fieldCount = $this->getFieldCount($rs);
 
@@ -345,6 +345,18 @@ class RowBrowserRenderer extends AppContext
                 $hasLineBreak = isset($v) && str_contains($v, "\n");
                 $lineBreak = $hasLineBreak ? "line-break" : "no-line-break";
                 $class .= " auto-wrap $array $lineBreak";
+                // 2130 -> 750px , 210 -> 100px
+                if (!$hasLineBreak && is_string($v)) {
+                    if (strlen($v) > 2100) {
+                        $class .= " full-width";
+                    } elseif (strlen($v) > 1050) {
+                        $class .= " large-width";
+                    } elseif (strlen($v) > 500) {
+                        $class .= " medium-width";
+                    } elseif (strlen($v) > 100) {
+                        $class .= " small-width";
+                    }
+                }
             }
 
             echo "<td class=\"$class\" data-type=\"$type\" data-name=\"" . htmlspecialchars($finfo->name) . "\">\n";
@@ -402,7 +414,7 @@ class RowBrowserRenderer extends AppContext
                 <?= htmlspecialchars($pg->conn->ErrorMsg()) ?>
             </div>
         <?php endif ?>
-        <div class="actions">
+        <div class="footer">
             <a href="javascript:void(0)"
                 onclick="setEditorValue('query-editor', <?= htmlspecialchars(json_encode($query)) ?>);">
                 <span class="psm">✎</span>
@@ -800,6 +812,13 @@ class RowBrowserRenderer extends AppContext
                 $lang
             );
 
+            $isCatalogSchema = $misc->isCatalogSchema();
+            if ($isCatalogSchema) {
+                // Disable edit/delete buttons in catalog schema
+                $colspan = 0;
+                unset($actions['actionbuttons']);
+            }
+
             $table_data = "";
             if (!empty($key_fields)) {
                 $table_data .= " data-schema=\"" . htmlspecialchars($_gets['schema']) . "\"";
@@ -959,6 +978,7 @@ class RowBrowserRenderer extends AppContext
         &$key_fields_early
     ): bool {
         $misc = AppContainer::getMisc();
+        $lang = AppContainer::getLang();
 
         if (!isset($_REQUEST['schema']))
             $_REQUEST['schema'] = $pg->_schema;
@@ -992,11 +1012,32 @@ class RowBrowserRenderer extends AppContext
                 $query .= ';';
             }
             $result = SqlParser::parseFromString($query);
-            foreach ($result['statements'] as $stmt) {
+            $statements = array_column(
+                array_filter(
+                    $result['items'],
+                    function ($item) {
+                        return $item['type'] === 'statement';
+                    }
+                ),
+                'content'
+            );
+            foreach ($statements as $index => $stmt) {
                 if (isSqlReadQuery($stmt, false)) {
                     // Stop at the first read query
                     $query = $stmt;
                     $hasReadQuery = true;
+                    if (\count($statements) > $index + 1) {
+                        // There are more statements after the read query
+                        $misc->printMsg(
+                            format_string(
+                                $lang['strmultiplequeries'],
+                                [
+                                    'count' => $index + 1,
+                                    'total' => \count($statements)
+                                ]
+                            )
+                        );
+                    }
                     break;
                 } else {
                     // Execute non-read query
@@ -1031,7 +1072,7 @@ class RowBrowserRenderer extends AppContext
             if (!empty($parsed['SELECT']) && ($parsed['FROM'][0]['expr_type'] ?? '') == 'table') {
                 $parts = $parsed['FROM'][0]['no_quotes']['parts'] ?? [];
                 $changed = false;
-                if (count($parts) === 2) {
+                if (\count($parts) === 2) {
                     [$schema, $table] = $parts;
                     $changed = $_REQUEST['schema'] != $schema || $table_name != $table;
                 } else {

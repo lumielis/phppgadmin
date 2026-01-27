@@ -56,6 +56,11 @@ class LogCollector
         $this->append(ExecutionLog::success($message, $statement));
     }
 
+    public function addFatal(string $message, ?string $statement = null, ?int $errorCode = null): void
+    {
+        $this->append(ExecutionLog::fatal($message, $statement, $errorCode));
+    }
+
     public function addError(string $message, ?string $statement = null, ?int $errorCode = null): void
     {
         $this->append(ExecutionLog::error($message, $statement, $errorCode));

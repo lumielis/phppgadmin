@@ -116,12 +116,13 @@ class TrailRenderer extends AppContext
             $done = true;
 
         if (isset($_REQUEST['schema']) && !$done) {
+            $isCatalog = $this->misc()->isCatalogSchema($_REQUEST['schema']);
             $trail['schema'] = [
                 'title' => $lang['strschema'],
                 'text' => $_REQUEST['schema'],
                 'url' => $this->misc()->getHREFSubject('schema'),
                 'help' => 'pg.schema',
-                'icon' => 'Schema'
+                'icon' => $isCatalog ? 'Catalog' : 'Schema'
             ];
         }
         if ($subject == 'schema')

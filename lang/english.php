@@ -140,6 +140,7 @@ $lang['struploadfile'] = 'Upload file';
 $lang['strupload'] = 'Upload';
 $lang['strnewwindow'] = 'Open New Window';
 $lang['strsystemobjectdenied'] = 'It is a system object and cannot be modified.';
+$lang['strmultiplequeries'] = 'The query contains multiple statements. Only the first {count} has been executed.';
 
 # Import form labels
 $lang['strimportroles'] = 'Import roles';
@@ -161,6 +162,10 @@ $lang['strimportdata'] = 'Import Data (COPY/INSERT)';
 $lang['strimportownership'] = 'Import Ownership (ALTER OWNER)';
 $lang['strimportrights'] = 'Import Rights (GRANT/REVOKE)';
 $lang['strimportallowdrops'] = 'Allow DROP Statements';
+$lang['strimportignoreconnect'] = 'Ignore database change commands (\\connect)';
+$lang['strimportstoponerror'] = 'Stop on error';
+$lang['strimportverbose'] = 'Verbose logging (show each executed statement)';
+$lang['strimportcompresschunks'] = 'Compress chunks during upload';
 $lang['strerrorhandling'] = 'Error Handling';
 $lang['strimporterrorabort'] = 'Abort on first error';
 $lang['strimporterrorlog'] = 'Log and continue';
@@ -183,7 +188,7 @@ $lang['strgotoppage'] = 'back to top';
 $lang['strtheme'] = 'Theme';
 $lang['strcluster'] = 'Cluster';
 $lang['strimportcompresschunks'] = 'Compress chunks with gzip (saves bandwidth)';
-$lang['strimportintro'] = 'The import function reads and unpacks a file in the browser chunk by chunk and uploads the parts, where they are processed immediately. With this logic, it should be possible to run long imports with large files.';
+$lang['strimportintro'] = 'The import function reads and unpacks a file in the browser chunk by chunk and uploads the parts, where they are processed immediately. This allows longer imports with larger files to be carried out.';
 $lang['strusefirstrowheaders'] = 'Use first row as column names (CSV, TSV)';
 
 // Admin
@@ -749,6 +754,13 @@ $lang['strschemaaltered'] = 'Schema altered.';
 $lang['strschemaalteredbad'] = 'Schema alteration failed.';
 $lang['strsearchpath'] = 'Schema search path';
 $lang['strspecifyschematodrop'] = 'You must specify at least one schema to drop.';
+
+// Catalogs
+$lang['strcatalog'] = 'Catalog';
+$lang['strcatalogs'] = 'Catalogs';
+$lang['strnocatalog'] = 'No catalog found.';
+$lang['strnocatalogs'] = 'No catalogs found.';
+$lang['strsystemcatalog'] = 'System Catalog';
 
 // Reports
 

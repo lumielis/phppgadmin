@@ -4,9 +4,9 @@ namespace PhpPgAdmin\Database\Actions;
 
 use ADORecordSet_array;
 use ADORecordSet_empty;
-use PhpPgAdmin\Database\AppActions;
 
-class TypeActions extends AppActions
+
+class TypeActions extends ActionsBase
 {
     // Base constructor inherited from Actions
 

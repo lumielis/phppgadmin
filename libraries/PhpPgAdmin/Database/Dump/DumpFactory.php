@@ -13,11 +13,11 @@ class DumpFactory
      * Creates a dumper for the specified subject.
      * 
      * @param string $subject
-     * @param Postgres|null $connection
+     * @param Postgres $connection
      * @return ExportDumper
      * @throws \Exception If subject is not supported
      */
-    public static function create($subject, Postgres $connection = null): ExportDumper
+    public static function create($subject, Postgres $connection): ExportDumper
     {
         $className = __NAMESPACE__ . '\\' . ucfirst(strtolower($subject)) . 'Dumper';
 

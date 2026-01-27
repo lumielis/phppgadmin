@@ -16,6 +16,7 @@ class ImportExecutor
             $currentUser = pg_parameter_status($pg->conn->_connectionID, 'user');
         }
 
+        /*
         // If importing into a specific schema, ensure search_path is set so
         // unqualified object references resolve correctly.
         if (($scope ?? '') === 'schema' && !empty($state['scope_ident'])) {
@@ -27,6 +28,7 @@ class ImportExecutor
                 // ignore errors; execution will fail later if schema missing
             }
         }
+        */
 
         $streamingMode = !empty($opts['streaming']);
         $existingCollector = $logs instanceof LogCollector ? $logs : null;
@@ -54,9 +56,11 @@ class ImportExecutor
                 $executor->execute($stmtTrim);
             } catch (StatementExecutionException $ex) {
                 $errors++;
-                if (($opts['error_mode'] ?? 'abort') === 'abort') {
+                // If stop_on_error is enabled, throw exception to stop processing immediately
+                if (!empty($opts['stop_on_error'])) {
                     throw new Exception('Statement failed: ' . $ex->getMessage(), 0, $ex);
                 }
+                // Otherwise continue processing remaining statements
             }
         }
 

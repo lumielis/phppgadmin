@@ -66,14 +66,21 @@ class ImportFormRenderer extends AppContext
                         <?= $lang['strimportrights'] ?></label></div>
                 <div class="my-1 ml-1"><label><input type="checkbox" name="opt_defer_self" checked />
                         <?= $lang['strdeferself'] ?></label></div>
-                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_allow_drops" />
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_allow_drops" checked />
                         <?= $lang['strimportallowdrops'] ?></label></div>
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_ignore_connect" />
+                        <?= $lang['strimportignoreconnect'] ?? 'Ignore \\connect commands' ?></label></div>
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_stop_on_error" checked />
+                        <?= $lang['strimportstoponerror'] ?? 'Stop on error' ?>
+                    </label></div>
+                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_verbose" />
+                        <?= $lang['strimportverbose'] ?? 'Verbose logging (show each executed statement)' ?>
+                    </label></div>
                 <?php if (function_exists('gzopen')): ?>
                     <div class="my-1 ml-1"><label><input type="checkbox" name="opt_compress_chunks" />
-                            <?= $lang['strimportcompresschunks'] ?></label></div>
+                            <?= $lang['strimportcompresschunks'] ?>
+                        </label></div>
                 <?php endif; ?>
-                <div class="my-1 ml-1"><label><input type="checkbox" name="opt_stop_on_error" checked />
-                        <?= $lang['strimportstoponerror'] ?? 'Stop on error' ?></label></div>
             </fieldset>
 
             <div class="form-group">

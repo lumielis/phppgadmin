@@ -92,7 +92,8 @@ function doCreate($msg = '')
 			</tr>
 			<tr>
 				<th class="data left"><?= $lang['strexpires'] ?></th>
-				<td class="data1"><input size="23" name="formExpires" value="<?= html_esc($_POST['formExpires']) ?>" /></td>
+				<td class="data1"><input size="23" name="formExpires" value="<?= html_esc($_POST['formExpires']) ?>"
+						data-type="timestamp" /></td>
 			</tr>
 
 			<?php
@@ -293,7 +294,8 @@ function doAlter($msg = '')
 			</tr>
 			<tr>
 				<th class="data left"><?= $lang['strexpires'] ?></th>
-				<td class="data1"><input size="23" name="formExpires" value="<?= html_esc($_POST['formExpires']) ?>" /></td>
+				<td class="data1"><input size="23" name="formExpires" value="<?= html_esc($_POST['formExpires']) ?>"
+						data-type="timestamp" /></td>
 			</tr>
 
 			<?php
@@ -982,5 +984,3 @@ switch ($action) {
 }
 
 $misc->printFooter();
-
-

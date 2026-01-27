@@ -15,6 +15,7 @@ class StatementExecutor
     private $logs;
     /** @var array */
     private $state;
+    /** @var Postgres */
     private $pg;
     /** @var bool */
     private $isSuper;
@@ -165,8 +166,77 @@ class StatementExecutor
         return $this->executeStatement($stmt);
     }
 
+    private function adjustStatementToServer(string $stmt): string
+    {
+        static $createIfNtExistsItems = [];
+        static $createOrReplaceItems = [];
+        static $isInitialized = false;
+        if (!$isInitialized) {
+            $isInitialized = true;
+            if ($this->pg->major_version < 9.1) {
+                // Remove IF NOT EXISTS from CREATE EXTENSION for older servers
+                $createIfNtExistsItems[] = 'EXTENSION';
+            }
+            if ($this->pg->major_version < 9.3) {
+                // Remove IF NOT EXISTS from CREATE SCHEMA for older servers
+                $createIfNtExistsItems[] = 'SCHEMA';
+            }
+            if ($this->pg->major_version < 9.4) {
+                // Remove IF NOT EXISTS from CREATE MATERIALIZED VIEW for older servers
+                $createIfNtExistsItems[] = 'MATERIALIZED\s+VIEW';
+            }
+            if ($this->pg->major_version < 9.5) {
+                // Remove IF NOT EXISTS from CREATE SEQUENCE for older servers
+                $createIfNtExistsItems[] = 'SEQUENCE';
+                // Remove IF NOT EXISTS from CREATE TABLE for older servers
+                $createIfNtExistsItems[] = 'TABLE';
+                // Remove IF NOT EXISTS from CREATE [UNIQUE] INDEX for older servers
+                $createIfNtExistsItems[] = '(?:UNIQUE\s+)?INDEX';
+            }
+            if ($this->pg->major_version < 9.6) {
+                // Remove IF NOT EXISTS from CREATE OPERATOR for older servers
+                $createIfNtExistsItems[] = 'OPERATOR';
+            }
+            if ($this->pg->major_version < 12) {
+                // Remove OR REPLACE from CREATE AGGREGATE for older servers
+                $createOrReplaceItems[] = 'AGGREGATE';
+            }
+            if ($this->pg->major_version < 14) {
+                // Remove OR REPLACE from CREATE [CONSTRAINT] TRIGGER for older servers
+                $createOrReplaceItems[] = '(?:CONSTRAINT\s+)?TRIGGER';
+            }
+        }
+        if (!empty($createIfNtExistsItems)) {
+            $pattern = '/^\s*CREATE\s+(' . implode('|', $createIfNtExistsItems) . ')\s+IF\s+NOT\s+EXISTS\b/i';
+            $stmt = preg_replace($pattern, 'CREATE $1', $stmt);
+        }
+        if (!empty($createOrReplaceItems)) {
+            $pattern = '/^\s*CREATE\s+OR\s+REPLACE\s+(' . implode('|', $createOrReplaceItems) . ')\b/i';
+            $stmt = preg_replace($pattern, 'CREATE $1', $stmt);
+        }
+
+        // Adjust EXECUTE PROCEDURE / EXECUTE FUNCTION based on server version
+        if ($this->pg->major_version < 11) {
+            // PG 9.0–10 needs EXECUTE PROCEDURE
+            $stmt = str_ireplace('EXECUTE FUNCTION', 'EXECUTE PROCEDURE', $stmt);
+        } else {
+            // PG 11+ needs EXECUTE FUNCTION
+            $stmt = str_ireplace('EXECUTE PROCEDURE', 'EXECUTE FUNCTION', $stmt);
+        }
+
+        return $stmt;
+    }
+
     private function executeStatement(string $stmt): bool
     {
+        $stmt = $this->adjustStatementToServer($stmt);
+
+        // Verbose logging: log the statement before execution
+        if (!empty($this->options['verbose'])) {
+            $truncated = strlen($stmt) > 200 ? substr($stmt, 0, 200) . '...' : $stmt;
+            $this->logs->addInfo('Executing: ' . $truncated);
+        }
+
         $err = $this->pg->execute($stmt);
         if ($err !== 0) {
             $errorMsg = '';

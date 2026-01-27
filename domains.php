@@ -575,6 +575,12 @@ function doDefault($msg = '')
 		],
 	];
 
+	$isCatalogSchema = $misc->isCatalogSchema();
+	if ($isCatalogSchema) {
+		$actions = [];
+		unset($columns['actions']);
+	}
+
 	$misc->printTable($domains, $columns, $actions, 'domains-domains', $lang['strnodomains']);
 
 	$navlinks = [
@@ -594,7 +600,10 @@ function doDefault($msg = '')
 			'content' => $lang['strcreatedomain']
 		]
 	];
-	$misc->printNavLinks($navlinks, 'domains-domains', get_defined_vars());
+
+	if (!$isCatalogSchema) {
+		$misc->printNavLinks($navlinks, 'domains-domains', get_defined_vars());
+	}
 }
 
 /**

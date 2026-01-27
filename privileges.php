@@ -247,8 +247,8 @@ function doDefault($msg = '')
 
 	// Links for granting to a user or group
 	switch ($_REQUEST['subject']) {
-		case 'table':
-		case 'view':
+		//case 'table':
+		//case 'view':
 		case 'sequence':
 		case 'function':
 		case 'tablespace':
@@ -257,12 +257,14 @@ function doDefault($msg = '')
 			$alltxt = $lang["strshowall{$_REQUEST['subject']}s"];
 			$allicon = $misc->icon(ucfirst($_REQUEST['subject']) . 's');
 			break;
-		case 'schema':
-			$alllabel = "showallschemas";
-			$allurl = "schemas.php";
-			$alltxt = $lang["strshowallschemas"];
-			$allicon = $misc->icon('Schemas');
-			break;
+		/*
+	case 'schema':
+		$alllabel = "showallschemas";
+		$allurl = "schemas.php";
+		$alltxt = $lang["strshowallschemas"];
+		$allicon = $misc->icon('Schemas');
+		break;
+		*/
 		case 'database':
 			$alllabel = "showalldatabases";
 			$allurl = 'all_db.php';
@@ -303,10 +305,12 @@ function doDefault($msg = '')
 		$urlvars = [
 			'action' => 'alter',
 			'server' => $_REQUEST['server'],
-			'database' => $_REQUEST['database'],
 			$subject => $object,
 			'subject' => $subject
 		];
+		if (isset($_REQUEST['database'])) {
+			$urlvars['database'] = $_REQUEST['database'];
+		}
 		if (isset($_REQUEST['schema'])) {
 			$urlvars['schema'] = $_REQUEST['schema'];
 		}
@@ -336,14 +340,17 @@ function doDefault($msg = '')
 	];
 
 	if (isset($allurl)) {
+		$urlvars = [
+			'server' => $_REQUEST['server'],
+		];
+		if (isset($_REQUEST['database'])) {
+			$urlvars['database'] = $_REQUEST['database'];
+		}
 		$navlinks[$alllabel] = [
 			'attr' => [
 				'href' => [
 					'url' => $allurl,
-					'urlvars' => [
-						'server' => $_REQUEST['server'],
-						'database' => $_REQUEST['database']
-					]
+					'urlvars' => $urlvars,
 				]
 			],
 			'icon' => $allicon,

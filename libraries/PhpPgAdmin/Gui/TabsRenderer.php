@@ -140,6 +140,14 @@ class TabsRenderer extends AppContext
                         'help' => 'pg.schema',
                         'icon' => 'Schemas',
                     ],
+                    'catalogs' => [
+                        'title' => $lang['strcatalogs'],
+                        'url' => 'catalogs.php',
+                        'urlvars' => ['subject' => 'database'],
+                        'help' => 'pg.catalog',
+                        'tree' => true,
+                        'icon' => 'Catalogs',
+                    ],
                     'sql' => [
                         'title' => $lang['strsql'],
                         'url' => 'database.php',
@@ -342,6 +350,9 @@ class TabsRenderer extends AppContext
                         'icon' => 'Import',
                     ],
                 ];
+                if ($this->misc()->isCatalogSchema()) {
+                    unset($tabs['sequences'], $tabs['import']);
+                }
                 break;
 
             case 'table':
@@ -444,6 +455,16 @@ class TabsRenderer extends AppContext
                         'hide' => false,
                     ],
                 ];
+                if ($this->misc()->isCatalogSchema()) {
+                    unset(
+                        $tabs['insert'],
+                        $tabs['constraints'],
+                        $tabs['triggers'],
+                        $tabs['rules'],
+                        $tabs['admin'],
+                        $tabs['import']
+                    );
+                }
                 break;
 
             case 'view':
@@ -502,6 +523,11 @@ class TabsRenderer extends AppContext
                         'hide' => false,
                     ],
                 ];
+                if ($this->misc()->isCatalogSchema()) {
+                    unset(
+                        $tabs['rules']
+                    );
+                }
                 break;
 
             case 'function':

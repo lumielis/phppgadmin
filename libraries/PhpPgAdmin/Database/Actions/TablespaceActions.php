@@ -7,12 +7,12 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
+
 
 /**
  * Tablespace action class - handles tablespace management
  */
-class TablespaceActions extends AppActions
+class TablespaceActions extends ActionsBase
 {
 	// Base constructor inherited from Actions
 

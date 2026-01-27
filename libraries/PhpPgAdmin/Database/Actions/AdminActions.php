@@ -3,9 +3,9 @@
 namespace PhpPgAdmin\Database\Actions;
 
 use PhpPgAdmin\Database\ArrayRecordSet;
-use PhpPgAdmin\Database\AppActions;
 
-class AdminActions extends AppActions
+
+class AdminActions extends ActionsBase
 {
     /**
      * Analyze a database

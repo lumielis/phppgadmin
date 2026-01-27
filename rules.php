@@ -43,35 +43,46 @@ function createRule($confirm, $msg = '')
 		<form action="rules.php" method="post">
 			<table>
 				<tr>
-					<th class="data left required"><?= $lang['strname'] ?></th>
+					<th class="data left required">
+						<?= $lang['strname'] ?>
+					</th>
 					<td class="data1">
 						<input name="name" size="16" maxlength="<?= $pg->_maxNameLen ?>"
 							value="<?= html_esc($_POST['name']) ?>">
 					</td>
 				</tr>
 				<tr>
-					<th class="data left required"><?= $lang['strevent'] ?></th>
+					<th class="data left required">
+						<?= $lang['strevent'] ?>
+					</th>
 					<td class="data1"><select name="event">
 							<?php foreach (RuleActions::RULE_EVENTS as $v): ?>
-								<option value="<?= $v ?>" <?= ($v == $_POST['event']) ? ' selected="selected"' : '' ?>><?= $v ?>
+								<option value="<?= $v ?>" <?= ($v == $_POST['event']) ? ' selected="selected"' : '' ?>>
+									<?= $v ?>
 								</option>
 							<?php endforeach ?>
 						</select></td>
 				</tr>
 				<tr>
-					<th class="data left"><?= $lang['strwhere'] ?></th>
+					<th class="data left">
+						<?= $lang['strwhere'] ?>
+					</th>
 					<td class="data1">
 						<input name="where" size="32" value="<?= html_esc($_POST['where']) ?>" />
 					</td>
 				</tr>
 				<tr>
-					<th class="data left"><label for="instead"><?= $lang['strinstead'] ?></label></th>
+					<th class="data left"><label for="instead">
+							<?= $lang['strinstead'] ?>
+						</label></th>
 					<td class="data1">
 						<input type="checkbox" id="instead" name="instead" <?= isset($_POST['instead']) ? ' checked="checked"' : '' ?> />
 					</td>
 				</tr>
 				<tr>
-					<th class="data left required"><?= $lang['straction'] ?></th>
+					<th class="data left required">
+						<?= $lang['straction'] ?>
+					</th>
 					<td class="data1">
 						<input type="radio" id="type1" name="type" value="NOTHING" <?= ($_POST['type'] == 'NOTHING') ? ' checked="checked"' : '' ?> /> <label for="type1">NOTHING</label><br />
 						<input type="radio" name="type" value="SOMETHING" <?= ($_POST['type'] == 'SOMETHING') ? ' checked="checked"' : '' ?> />
@@ -127,11 +138,13 @@ function doDrop($confirm)
 		$misc->printTitle($lang['strdrop'], 'pg.rule.drop');
 
 		?>
-		<p><?php printf(
-			$lang['strconfdroprule'],
-			$misc->printVal($_REQUEST['rule']),
-			$misc->printVal($_REQUEST[$_REQUEST['reltype']])
-		) ?></p>
+		<p>
+			<?php printf(
+				$lang['strconfdroprule'],
+				$misc->printVal($_REQUEST['rule']),
+				$misc->printVal($_REQUEST[$_REQUEST['reltype']])
+			) ?>
+		</p>
 		<form action="rules.php" method="post">
 			<input type="hidden" name="action" value="drop" />
 			<input type="hidden" name="subject" value="<?= html_esc($_REQUEST['reltype']) ?>" />
@@ -140,7 +153,9 @@ function doDrop($confirm)
 			<input type="hidden" name="rule" value="<?= html_esc($_REQUEST['rule']) ?>" />
 			<?= $misc->form ?>
 			<p>
-				<input type="checkbox" id="cascade" name="cascade" /> <label for="cascade"><?= $lang['strcascade'] ?></label>
+				<input type="checkbox" id="cascade" name="cascade" /> <label for="cascade">
+					<?= $lang['strcascade'] ?>
+				</label>
 			</p>
 			<input type="submit" name="yes" value="<?= $lang['stryes'] ?>" />
 			<input type="submit" name="no" value="<?= $lang['strno'] ?>" />

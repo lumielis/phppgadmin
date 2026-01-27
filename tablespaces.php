@@ -312,7 +312,15 @@ function doDefault($msg = '')
 		]
 	];
 
-	$misc->printTable($tablespaces, $columns, $actions, 'tablespaces-tablespaces', $lang['strnotablespaces']);
+	$preFnc = function ($tabledata, $actions) {
+		// Adjust location for default tablespace
+		if (str_starts_with($tabledata->fields['spcname'], 'pg_')) {
+			unset($actions['alter'], $actions['drop']);
+		}
+		return $actions;
+	};
+
+	$misc->printTable($tablespaces, $columns, $actions, 'tablespaces-tablespaces', $lang['strnotablespaces'], $preFnc);
 
 	$misc->printNavLinks([
 		'create' => [

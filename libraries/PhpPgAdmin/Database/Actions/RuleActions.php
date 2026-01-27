@@ -2,9 +2,9 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class RuleActions extends AppActions
+
+class RuleActions extends ActionsBase
 {
     // Rule action types
     public const RULE_EVENTS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'];

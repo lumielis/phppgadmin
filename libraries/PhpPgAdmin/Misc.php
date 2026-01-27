@@ -901,10 +901,14 @@ class Misc extends AppContext
 			) {
 				$server_id = $info['host'] . ':' . $info['port'] . ':' . $info['sslmode'];
 
-				if (isset($logins[$server_id]))
+				if (isset($logins[$server_id])) {
 					$srvs[$server_id] = $logins[$server_id];
-				else
+					if (isset($info['desc'])) {
+						$srvs[$server_id]['desc'] = $info['desc'];
+					}
+				} else {
 					$srvs[$server_id] = $info;
+				}
 
 				$srvs[$server_id]['id'] = $server_id;
 				$srvs[$server_id]['action'] = url(
@@ -935,6 +939,8 @@ class Misc extends AppContext
 			return strcmp($a['desc'], $b['desc']);
 		});
 
+		//var_dump($srvs);
+
 		if ($recordset) {
 			return new ArrayRecordSet($srvs);
 		}
@@ -954,11 +960,11 @@ class Misc extends AppContext
 		$conf = $this->conf();
 		$lang = $this->lang();
 
-		if ($server_id === null && isset($_REQUEST['server']))
+		if (!isset($server_id) && isset($_REQUEST['server']))
 			$server_id = $_REQUEST['server'];
 
 		// Check for the server in the logged-in list
-		if (isset($_SESSION['webdbLogin'][$server_id])) {
+		if (isset($server_id) && isset($_SESSION['webdbLogin'][$server_id])) {
 			$info = $_SESSION['webdbLogin'][$server_id];
 
 			// Decrypt password if encryption is available and password is encrypted
@@ -1218,5 +1224,13 @@ class Misc extends AppContext
 			return false;
 
 		return $fksprops;
+	}
+
+	public function isCatalogSchema($name = null): bool
+	{
+		if ($name === null) {
+			$name = $this->postgres()->_schema;
+		}
+		return $name === 'pg_catalog' || $name === 'information_schema';
 	}
 }

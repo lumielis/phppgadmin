@@ -2,7 +2,7 @@
 
 use PhpPgAdmin\Core\AppContainer;
 use PhpPgAdmin\Database\Actions\OperatorActions;
-use PhpPgAdmin\Database\Actions\SqlFunctionActions;
+use PhpPgAdmin\Database\Actions\FunctionActions;
 use PhpPgAdmin\Database\Actions\TypeActions;
 
 /**
@@ -172,7 +172,7 @@ function doCreate($msg = '')
 	$pg = AppContainer::getPostgres();
 	$misc = AppContainer::getMisc();
 	$lang = AppContainer::getLang();
-	$funcActions = new SqlFunctionActions($pg);
+	$funcActions = new FunctionActions($pg);
 	$typeActions = new TypeActions($pg);
 
 	if (!isset($_POST['name']))
@@ -424,7 +424,17 @@ function doDefault($msg = '')
 		]
 	];
 
+	$isCatalogSchema = $misc->isCatalogSchema();
+	if ($isCatalogSchema) {
+		$actions = [];
+		unset($columns['actions']);
+	}
+
 	$misc->printTable($operators, $columns, $actions, 'operators-operators', $lang['strnooperators']);
+
+	if ($isCatalogSchema) {
+		return;
+	}
 
 	$misc->printNavLinks(
 		[

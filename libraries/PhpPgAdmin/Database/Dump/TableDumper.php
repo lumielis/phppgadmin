@@ -19,6 +19,8 @@ class TableDumper extends ExportDumper
 {
     private $tableQuoted;
     private $schemaQuoted;
+    private $deferredConstraints = [];
+    private $deferredIndexes = [];
 
     public function dump($subject, array $params, array $options = [])
     {
@@ -35,6 +37,10 @@ class TableDumper extends ExportDumper
         $this->write("\n-- Table: \"{$schema}\".\"{$table}\"\n\n");
 
         if (empty($options['data_only'])) {
+            // Reset deferred constraints/indexes for this table
+            $this->deferredConstraints = [];
+            $this->deferredIndexes = [];
+
             // Use existing logic from TableActions/Postgres driver but adapted
             // Use writer-style method instead of getting SQL back
             $this->dumpTableStructure($table, $options);
@@ -47,9 +53,16 @@ class TableDumper extends ExportDumper
         }
 
         if (empty($options['data_only'])) {
+            // Apply constraints and indexes AFTER data import for better performance
+            $this->applyDeferredConstraints($options);
             $this->writeIndexes($table, $options);
-            $this->writeTriggers($table, $options);
-            $this->writeRules($table, $options);
+            $this->deferTriggers($table, $schema, $options);
+            $this->deferRules($table, $schema, $options);
+        }
+
+        // Register this table as dumped (for sequence ownership validation)
+        if ($this->parentDumper && method_exists($this->parentDumper, 'registerDumpedTable')) {
+            $this->parentDumper->registerDumpedTable($schema, $table);
         }
     }
 
@@ -132,11 +145,44 @@ class TableDumper extends ExportDumper
             }
             $name = $this->connection->quoteIdentifier($atts->fields['attname']);
             $this->write("    {$name} {$atts->fields['type']}");
-            if ($this->connection->phpBool($atts->fields['attnotnull'])) {
-                $this->write(" NOT NULL");
-            }
-            if ($atts->fields['adsrc'] !== null) {
-                $this->write(" DEFAULT {$atts->fields['adsrc']}");
+
+            // Check for generated column first (PostgreSQL 12+)
+            if (isset($atts->fields['attgenerated']) && $atts->fields['attgenerated'] === 's') {
+                // Generated stored column - write GENERATED ALWAYS AS
+                if ($atts->fields['adsrc'] !== null) {
+                    $this->write(" GENERATED ALWAYS AS ({$atts->fields['adsrc']}) STORED");
+                }
+            } else {
+                // Regular column - handle NOT NULL and DEFAULT
+                if ($this->connection->phpBool($atts->fields['attnotnull'])) {
+                    $this->write(" NOT NULL");
+                }
+
+                if ($atts->fields['sequence_name'] !== null) {
+                    // Case 1: Owned sequence (has AUTO dependency in pg_depend)
+                    $seqSchema = $this->connection->quoteIdentifier($atts->fields['sequence_schema']);
+                    $seqName = $this->connection->quoteIdentifier($atts->fields['sequence_name']);
+                    $default = "nextval('{$seqSchema}.{$seqName}'::regclass)";
+                    $this->write(" DEFAULT {$default}");
+                } elseif ($atts->fields['adsrc'] !== null && preg_match("/nextval\\('((?:[^']|'')+)'/", $atts->fields['adsrc'], $matches)) {
+                    // Case 2: Non-owned sequence - parse and resolve schema
+                    // Unescape doubled single quotes
+                    $seqIdentifier = str_replace("''", "'", $matches[1]);
+                    $resolvedSeq = $this->resolveSequenceSchema($seqIdentifier);
+
+                    if ($resolvedSeq) {
+                        $seqSchema = $this->connection->quoteIdentifier($resolvedSeq['schema']);
+                        $seqName = $this->connection->quoteIdentifier($resolvedSeq['name']);
+                        $default = "nextval('{$seqSchema}.{$seqName}'::regclass)";
+                        $this->write(" DEFAULT {$default}");
+                    } else {
+                        // Fallback to original if resolution fails
+                        $this->write(" DEFAULT {$atts->fields['adsrc']}");
+                    }
+                } elseif ($atts->fields['adsrc'] !== null) {
+                    // Case 3: Other defaults (not sequence-related)
+                    $this->write(" DEFAULT {$atts->fields['adsrc']}");
+                }
             }
 
             if ($atts->fields['comment'] !== null) {
@@ -147,16 +193,15 @@ class TableDumper extends ExportDumper
             $atts->moveNext();
         }
 
-        // constraints
+        // Store constraints for deferred application (except NOT NULL)
         while (!$cons->EOF) {
             if ($cons->fields['contype'] == 'n') {
                 // Skip NOT NULL constraints as they are dumped with the column definition
                 $cons->moveNext();
                 continue;
             }
-            $this->write(",\n");
+
             $name = $this->connection->quoteIdentifier($cons->fields['conname']);
-            $this->write("    CONSTRAINT {$name} ");
             $src = $cons->fields['consrc'];
             if (empty($src)) {
                 // Build constraint source from type and columns
@@ -168,11 +213,42 @@ class TableDumper extends ExportDumper
                     case 'u':
                         $src = "UNIQUE ($columns)";
                         break;
+                    case 'f':
+                        // Foreign key - should not happen as consrc is always populated
+                        $src = $cons->fields['consrc'];
+                        break;
+                    case 'c':
+                        // Check constraint - should not happen as consrc is always populated
+                        $src = $cons->fields['consrc'];
+                        break;
                     default:
-                        return false;
+                        $cons->moveNext();
+                        continue 2;
                 }
             }
-            $this->write($src);
+
+            // Add schema qualification to foreign key references
+            // pg_get_constraintdef() doesn't include schema when search_path is empty
+            if ($cons->fields['contype'] === 'f' && !empty($cons->fields['f_schema']) && !empty($cons->fields['f_table'])) {
+                $fSchema = $this->connection->quoteIdentifier($cons->fields['f_schema']);
+                $fTable = $this->connection->quoteIdentifier($cons->fields['f_table']);
+                $unqualifiedTable = $cons->fields['f_table'];
+
+                // Replace unqualified table reference with schema-qualified version
+                // Pattern: REFERENCES tablename( or REFERENCES tablename (
+                $src = preg_replace(
+                    '/REFERENCES\s+' . preg_quote($unqualifiedTable, '/') . '\s*\(/i',
+                    "REFERENCES {$fSchema}.{$fTable}(",
+                    $src
+                );
+            }
+
+            // Store constraint for later application
+            $this->deferredConstraints[] = [
+                'name' => $name,
+                'definition' => $src,
+                'type' => $cons->fields['contype']
+            ];
 
             $cons->moveNext();
         }
@@ -268,6 +344,24 @@ class TableDumper extends ExportDumper
     }
 
     /**
+     * Apply deferred constraints after data import.
+     */
+    private function applyDeferredConstraints($options)
+    {
+        if (empty($this->deferredConstraints)) {
+            return;
+        }
+
+        $this->write("\n-- Constraints (applied after data import)\n\n");
+
+        foreach ($this->deferredConstraints as $constraint) {
+            $this->write("ALTER TABLE {$this->schemaQuoted}.{$this->tableQuoted} ");
+            $this->write("ADD CONSTRAINT {$constraint['name']} {$constraint['definition']}");
+            $this->write(";\n");
+        }
+    }
+
+    /**
      * Write indexes for the table.
      */
     private function writeIndexes($table, $options)
@@ -283,7 +377,21 @@ class TableDumper extends ExportDumper
         $this->write("\n-- Indexes\n\n");
 
         while (!$indexes->EOF) {
+            if ($indexes->fields['indisprimary']) {
+                // Skip primary key index (created with constraint)
+                $indexes->moveNext();
+                continue;
+            }
+
             $def = $indexes->fields['inddef'];
+
+            // Replace tablename with schema-qualified name
+            $def = preg_replace(
+                '/ ON ([^ ]+) /',
+                " ON {$this->schemaQuoted}.$1 ",
+                $def
+            );
+
             if (!empty($options['if_not_exists'])) {
                 if ($this->connection->major_version >= 9.5) {
                     $def = str_replace(
@@ -305,9 +413,9 @@ class TableDumper extends ExportDumper
     }
 
     /**
-     * Write triggers for the table.
+     * Defer triggers for the table (to be applied after functions are created).
      */
-    private function writeTriggers($table, $options)
+    private function deferTriggers($table, $schema, $options)
     {
         $triggerActions = new TriggerActions($this->connection);
         $triggers = $triggerActions->getTriggers($table);
@@ -315,8 +423,6 @@ class TableDumper extends ExportDumper
         if (!is_object($triggers) || $triggers->EOF) {
             return;
         }
-
-        $this->write("\n-- Triggers\n\n");
 
         while (!$triggers->EOF) {
             $def = $triggers->fields['tgdef'];
@@ -334,15 +440,20 @@ class TableDumper extends ExportDumper
                     );
                 }
             }
-            $this->write("$def;\n");
+
+            // Add to parent SchemaDumper's deferred collection
+            if ($this->parentDumper && method_exists($this->parentDumper, 'addDeferredTrigger')) {
+                $this->parentDumper->addDeferredTrigger($schema, $table, $def);
+            }
+
             $triggers->moveNext();
         }
     }
 
     /**
-     * Write rules for the table.
+     * Defer rules for the table (to be applied after functions are created).
      */
-    private function writeRules($table, $options)
+    private function deferRules($table, $schema, $options)
     {
         $ruleActions = new RuleActions($this->connection);
         $rules = $ruleActions->getRules($table);
@@ -351,12 +462,15 @@ class TableDumper extends ExportDumper
             return;
         }
 
-        $this->write("\n-- Rules\n\n");
-
         while (!$rules->EOF) {
             $def = $rules->fields['definition'];
             $def = str_replace('CREATE RULE', 'CREATE OR REPLACE RULE', $def);
-            $this->write("$def;\n");
+
+            // Add to parent SchemaDumper's deferred collection
+            if ($this->parentDumper && method_exists($this->parentDumper, 'addDeferredRule')) {
+                $this->parentDumper->addDeferredRule($schema, $table, $def);
+            }
+
             $rules->moveNext();
         }
     }
@@ -402,6 +516,47 @@ class TableDumper extends ExportDumper
 
             $autovacs->moveNext();
         }
+    }
+
+    /**
+     * Resolve sequence schema from identifier (handles both qualified and unqualified names).
+     * 
+     * @param string $identifier The sequence identifier from nextval() expression
+     * @return array|null Array with 'schema' and 'name' keys, or null if not found
+     */
+    private function resolveSequenceSchema($identifier)
+    {
+        // Remove quotes if present
+        $identifier = trim($identifier, '"');
+
+        // If already schema-qualified (contains dot), parse it
+        if (strpos($identifier, '.') !== false) {
+            $parts = explode('.', $identifier, 2);
+            return [
+                'schema' => trim($parts[0], '"'),
+                'name' => trim($parts[1], '"')
+            ];
+        }
+
+        // Query to find sequence schema (using pg_table_is_visible for search_path)
+        $this->connection->clean($identifier);
+        $sql = "SELECT n.nspname AS schema, c.relname AS name
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid
+                WHERE c.relkind = 'S' 
+                  AND c.relname = '{$identifier}'
+                  AND pg_catalog.pg_table_is_visible(c.oid)
+                LIMIT 1";
+
+        $result = $this->connection->selectSet($sql);
+        if ($result && !$result->EOF) {
+            return [
+                'schema' => $result->fields['schema'],
+                'name' => $result->fields['name']
+            ];
+        }
+
+        return null;
     }
 
 }

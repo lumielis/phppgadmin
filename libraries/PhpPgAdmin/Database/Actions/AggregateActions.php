@@ -2,9 +2,9 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class AggregateActions extends AppActions
+
+class AggregateActions extends ActionsBase
 {
 
     /**
@@ -144,12 +144,36 @@ class AggregateActions extends AppActions
     {
         $c_schema = $this->connection->_schema;
         $this->connection->clean($c_schema);
-        $sql = "SELECT p.proname, CASE p.proargtypes[0] WHEN 'pg_catalog.\"any\"'::pg_catalog.regtype THEN NULL ELSE
-               pg_catalog.format_type(p.proargtypes[0], NULL) END AS proargtypes, a.aggtransfn, u.usename,
-               pg_catalog.obj_description(p.oid, 'pg_proc') AS aggrcomment
-               FROM pg_catalog.pg_proc p, pg_catalog.pg_namespace n, pg_catalog.pg_user u, pg_catalog.pg_aggregate a
-               WHERE n.oid = p.pronamespace AND p.proowner=u.usesysid AND p.oid=a.aggfnoid
-               AND p.prokind = 'a' AND n.nspname='{$c_schema}' ORDER BY 1, 2";
+
+        if ($this->connection->major_version >= 11) {
+            $aggFlag = "p.prokind = 'a'";
+        } else {
+            $aggFlag = "p.proisagg";
+        }
+
+        $sql =
+            "SELECT
+                p.proname,
+                CASE p.proargtypes[0]
+                    WHEN 'pg_catalog.\"any\"'::pg_catalog.regtype THEN NULL
+                    ELSE pg_catalog.format_type(p.proargtypes[0], NULL)
+                END AS proargtypes,
+                a.aggtransfn,
+                u.usename,
+                pg_catalog.obj_description(p.oid, 'pg_proc') AS aggrcomment
+            FROM
+                pg_catalog.pg_proc p,
+                pg_catalog.pg_namespace n,
+                pg_catalog.pg_user u,
+                pg_catalog.pg_aggregate a
+            WHERE
+                n.oid = p.pronamespace
+                AND p.proowner = u.usesysid
+                AND p.oid = a.aggfnoid
+                AND {$aggFlag}
+                AND n.nspname = '{$c_schema}'
+            ORDER BY 1, 2
+        ";
 
         return $this->connection->selectSet($sql);
     }

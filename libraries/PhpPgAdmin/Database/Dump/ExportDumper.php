@@ -22,7 +22,12 @@ abstract class ExportDumper extends AppContext
      */
     protected $outputStream = null;
 
-    public function __construct(Postgres $connection = null)
+    /**
+     * @var ExportDumper|null Parent dumper (for accessing deferred collections)
+     */
+    protected $parentDumper = null;
+
+    public function __construct(?Postgres $connection = null)
     {
         $this->connection = $connection ?? AppContainer::getPostgres();
     }
@@ -50,6 +55,8 @@ abstract class ExportDumper extends AppContext
         if ($this->outputStream) {
             $dumper->setOutputStream($this->outputStream);
         }
+        // Set parent reference so sub-dumpers can access parent's deferred collections
+        $dumper->parentDumper = $this;
         return $dumper;
     }
 
@@ -94,7 +101,7 @@ abstract class ExportDumper extends AppContext
         $this->write("-- Dump completed on " . date('Y-m-d H:i:s') . "\n");
     }
 
-    protected function writeConnectHeader(string $database = null)
+    protected function writeConnectHeader(?string $database = null)
     {
         if (!isset($database)) {
             $database = $this->connection->conn->database;

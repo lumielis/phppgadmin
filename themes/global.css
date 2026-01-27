@@ -741,15 +741,18 @@ pre code.hljs {
 	color: #0242c3;
 }
 
-.field .dt-date {
+.field .dt-date,
+.log-ts .log-date {
 	color: #0242c3;
 }
 
-.field .dt-time {
+.field .dt-time,
+.log-ts .log-time {
 	color: #c11a87;
 }
 
-.field .dt-tz {
+.field .dt-tz,
+.log-ts .log-tz {
 	color: #c1571a;
 }
 
@@ -766,6 +769,28 @@ pre code.hljs {
 	padding: 6px;
 	margin-top: 8px;
 	background: #f9f9f9;
+	resize: vertical;
+}
+
+.log-content.log-error {
+	color: #d32f2f;
+	font-weight: bold;
+}
+
+.log-level {
+	text-transform: uppercase;
+}
+
+.log-level.log-warning {
+	color: #f57c00;
+	font-weight: bold;
+}
+
+.log-content.log-fatal {
+	background-color: #d32f2f;
+	color: #fff;
+	font-weight: bold;
+	text-shadow: none;
 }
 
 .export-form .object-selection-list {
@@ -794,16 +819,20 @@ pre code.hljs {
 	overflow: auto;
 }
 
+.query-box div.footer,
+.query-box div.error,
+.query-box div.query-stats {
+	border-top: 1px solid #d1d1d1;
+}
+
 .query-box .query-stats {
 	color: #757575;
 	font-style: italic;
-	border-top: 1px solid #d1d1d1;
 }
 
 .query-box .error {
 	color: #d32f2f;
 	font-weight: bold;
-	border-top: 1px solid #d1d1d1;
 }
 
 /* Popup Field Editor */
@@ -864,6 +893,7 @@ th.large_type {
 
 td.auto-wrap pre {
 	white-space: pre;
+	overflow: initial;
 }
 
 td.auto-wrap .wrapper {
@@ -872,8 +902,20 @@ td.auto-wrap .wrapper {
 	overflow: auto;
 }
 
-td.auto-wrap.no-line-break .wrapper {
-	display: block ruby;
+td.auto-wrap.no-line-break.full-width .wrapper {
+	width: 750px;
+}
+
+td.auto-wrap.no-line-break.large-width .wrapper {
+	width: 500px;
+}
+
+td.auto-wrap.no-line-break.medium-width .wrapper {
+	width: 300px;
+}
+
+td.auto-wrap.no-line-break.small-width .wrapper {
+	width: 200px;
 }
 
 td.auto-wrap.no-line-break pre {

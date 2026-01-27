@@ -28,13 +28,13 @@ abstract class OutputFormatter
 
 **Supported Formatters:**
 
--   `SqlFormatter` - SQL INSERT statements (single, multi-row) or COPY format
--   `CopyFormatter` - PostgreSQL COPY FROM stdin format
--   `CsvFormatter` - RFC 4180 CSV format
--   `TabFormatter` - Tab-delimited format
--   `HtmlFormatter` - XHTML table output
--   `XmlFormatter` - XML structure with metadata
--   `JsonFormatter` - JSON with column metadata
+- `SqlFormatter` - SQL INSERT statements (single, multi-row) or COPY format
+- `CopyFormatter` - PostgreSQL COPY FROM stdin format
+- `CsvFormatter` - RFC 4180 CSV format
+- `TabFormatter` - Tab-delimited format
+- `HtmlFormatter` - XHTML table output
+- `XmlFormatter` - XML structure with metadata
+- `JsonFormatter` - JSON with column metadata
 
 ### 2. DumperInterface
 
@@ -56,11 +56,11 @@ interface DumperInterface
 
 **Supported Dumpers:**
 
--   `TableDumper` - Tables (with structure + data)
--   `ViewDumper` - Views (read-only data export)
--   `DatabaseDumper` - Full database dumps
--   `SchemaDumper` - Schema exports
--   And 12 other specialized dumpers
+- `TableDumper` - Tables (with structure + data)
+- `ViewDumper` - Views (read-only data export)
+- `DatabaseDumper` - Full database dumps
+- `SchemaDumper` - Schema exports
+- And 12 other specialized dumpers
 
 ### 3. FormatterFactory
 
@@ -230,14 +230,14 @@ $output = $formatter->format($recordset, $metadata);
 
 **Advantages:**
 
--   Output can be modified after generation (e.g., compress, add headers)
--   Works with buffering and capture mechanisms
--   Easy to test
+- Output can be modified after generation (e.g., compress, add headers)
+- Works with buffering and capture mechanisms
+- Easy to test
 
 **Disadvantages:**
 
--   Entire output held in memory
--   Slower for very large datasets
+- Entire output held in memory
+- Slower for very large datasets
 
 #### 2. Streaming Mode (Memory Efficient)
 
@@ -252,14 +252,14 @@ $formatter->format($recordset, $metadata);
 
 **Advantages:**
 
--   Memory efficient - no string collection
--   Faster for large datasets
--   Natural streaming support
+- Memory efficient - no string collection
+- Faster for large datasets
+- Natural streaming support
 
 **Disadvantages:**
 
--   Cannot modify output after generation
--   Not suitable for compression (unless buffered first)
+- Cannot modify output after generation
+- Not suitable for compression (unless buffered first)
 
 ### Practical Example: dataexport.php
 
@@ -345,10 +345,10 @@ $metadata = [
 
 Different formatters use different metadata fields:
 
--   **SqlFormatter** - uses `insert_format` and `table`
--   **HtmlFormatter** - uses `table` for header
--   **JsonFormatter** - uses `table`, `columns` for metadata section
--   **CsvFormatter** - ignores metadata
+- **SqlFormatter** - uses `insert_format` and `table`
+- **HtmlFormatter** - uses `table` for header
+- **JsonFormatter** - uses `table`, `columns` for metadata section
+- **CsvFormatter** - ignores metadata
 
 ## Benefits
 
@@ -387,28 +387,28 @@ echo $output_buffer;
 
 ### Core Infrastructure
 
--   `libraries/PhpPgAdmin/Database/Dump/DumperInterface.php` - Added getDump() and getTableData()
--   `libraries/PhpPgAdmin/Database/Dump/AbstractDumper.php` - Implemented getDump() and getTableData()
+- `libraries/PhpPgAdmin/Database/Dump/DumperInterface.php` - Added getDump() and getTableData()
+- `libraries/PhpPgAdmin/Database/Dump/AbstractDumper.php` - Implemented getDump() and getTableData()
 
 ### Formatters (All Refactored)
 
--   `libraries/PhpPgAdmin/Database/Export/OutputFormatter.php` - Changed signature to accept ADORecordSet
--   `libraries/PhpPgAdmin/Database/Export/SqlFormatter.php` - Generates INSERT/COPY from recordset
--   `libraries/PhpPgAdmin/Database/Export/CopyFormatter.php` - Generates COPY format from recordset
--   `libraries/PhpPgAdmin/Database/Export/CsvFormatter.php` - Processes recordset directly
--   `libraries/PhpPgAdmin/Database/Export/TabFormatter.php` - Tab-delimited from recordset
--   `libraries/PhpPgAdmin/Database/Export/HtmlFormatter.php` - XHTML from recordset
--   `libraries/PhpPgAdmin/Database/Export/XmlFormatter.php` - XML from recordset
--   `libraries/PhpPgAdmin/Database/Export/JsonFormatter.php` - JSON from recordset
+- `libraries/PhpPgAdmin/Database/Export/OutputFormatter.php` - Changed signature to accept ADORecordSet
+- `libraries/PhpPgAdmin/Database/Export/SqlFormatter.php` - Generates INSERT/COPY from recordset
+- `libraries/PhpPgAdmin/Database/Export/CopyFormatter.php` - Generates COPY format from recordset
+- `libraries/PhpPgAdmin/Database/Export/CsvFormatter.php` - Processes recordset directly
+- `libraries/PhpPgAdmin/Database/Export/TabFormatter.php` - Tab-delimited from recordset
+- `libraries/PhpPgAdmin/Database/Export/HtmlFormatter.php` - XHTML from recordset
+- `libraries/PhpPgAdmin/Database/Export/XmlFormatter.php` - XML from recordset
+- `libraries/PhpPgAdmin/Database/Export/JsonFormatter.php` - JSON from recordset
 
 ### Dumpers (Data Export Support)
 
--   `libraries/PhpPgAdmin/Database/Dump/TableDumper.php` - Added getTableData()
--   `libraries/PhpPgAdmin/Database/Dump/ViewDumper.php` - Added getTableData()
+- `libraries/PhpPgAdmin/Database/Dump/TableDumper.php` - Added getTableData()
+- `libraries/PhpPgAdmin/Database/Dump/ViewDumper.php` - Added getTableData()
 
 ### Consumer Pages
 
--   `dataexport.php` - Simplified from ~150 lines of inline formatting to 3 lines using formatters
+- `dataexport.php` - Simplified from ~150 lines of inline formatting to 3 lines using formatters
 
 ## Testing
 
@@ -441,3 +441,275 @@ $dumper->dump('database', [], ['clean' => true]);
 2. **Compression**: Built-in gzip/bzip2 support
 3. **Incremental Exports**: Support for exporting only recent changes
 4. **Format-Specific Options**: Column selection, filtering, sorting directly in formatters
+
+---
+
+## Deferred Statements Architecture
+
+### Overview
+
+The dump system uses a **deferred statements architecture** to resolve circular dependencies between database objects. This ensures that objects are created in the correct order and that all dependencies are satisfied during restore.
+
+### The Circular Dependency Problem
+
+PostgreSQL database objects have complex interdependencies:
+
+- **Triggers** reference functions that may reference tables
+- **Functions** may reference tables that haven't been created yet
+- **Views** may reference other views (nested views)
+- **Check constraints** may call functions
+- **Generated columns** use expressions that may call functions
+
+**Without deferral, traditional dump order causes failures:**
+
+```sql
+-- Traditional order (BROKEN):
+CREATE TABLE users (...);
+CREATE TRIGGER audit_trigger ON users EXECUTE FUNCTION audit_log();  -- ❌ Function doesn't exist!
+CREATE FUNCTION audit_log() RETURNS trigger AS $$ ... $$;
+```
+
+### Solution: Functions Before Tables + Deferred Triggers
+
+**Key Insight:** PostgreSQL's `SET check_function_bodies = false` allows functions to reference tables that don't exist yet. This enables a clean dump order:
+
+1. Functions are created first (with body validation disabled)
+2. Tables are created (functions already exist for generated columns, defaults, checks)
+3. Triggers and rules are deferred until after all structure is created
+4. Views are topologically sorted to handle nested dependencies
+5. Materialized views use `WITH NO DATA` and refresh later
+
+### New Dump Order
+
+```
+1. Domains and Types (topologically sorted)
+2. Sequences (without OWNED BY statements)
+3. Functions ← Moved BEFORE tables
+4. Aggregates
+5. Operators
+6. Tables (structure with defaults and check constraints)
+   - Defaults inline (functions exist)
+   - Check constraints inline (functions exist)
+   - Generated columns inline (functions exist)
+   - NO triggers (deferred)
+   - NO rules (deferred)
+7. Views (topologically sorted)
+8. Materialized Views (WITH NO DATA)
+9. Data import (COPY statements)
+10. DEFERRED OBJECTS APPLIED:
+    a. Refresh materialized views
+    b. Create triggers (functions and tables exist)
+    c. Create rules (functions and tables exist)
+    d. Set sequence ownerships (tables exist)
+```
+
+### Deferred Collections in SchemaDumper
+
+The `SchemaDumper` class maintains collections of deferred statements:
+
+```php
+private $deferredTriggers = [];              // Trigger definitions
+private $deferredRules = [];                 // Rule definitions
+private $deferredSequenceOwnerships = [];    // ALTER SEQUENCE OWNED BY
+private $deferredMaterializedViewRefreshes = []; // REFRESH MATERIALIZED VIEW
+private $dumpedTables = [];                  // Validation: track dumped tables
+```
+
+### Sub-Dumper Integration
+
+Sub-dumpers (TableDumper, ViewDumper, SequenceDumper) defer statements via parent reference:
+
+```php
+// In TableDumper:
+if ($this->parentDumper && method_exists($this->parentDumper, 'addDeferredTrigger')) {
+    $this->parentDumper->addDeferredTrigger($schema, $table, $triggerDefinition);
+}
+```
+
+### Topological Sorting
+
+**Two object types use topological sorting:**
+
+#### 1. Types and Domains
+
+Sorts based on `pg_depend` entries with `deptype IN ('n','i')` using Kahn's algorithm.
+
+#### 2. Views
+
+Views are topologically sorted to handle nested view dependencies:
+
+```php
+protected function sortViewsTopologically(array $views, array $deps)
+{
+    // Build dependency graph from pg_depend
+    // Apply Kahn's algorithm (topological sort)
+    // Detect circular dependencies
+    // Return sorted OIDs or handle cycles gracefully
+}
+```
+
+**Cycle Detection:**
+
+If circular view dependencies are detected (shouldn't happen in valid PostgreSQL databases), the system:
+
+1. Writes a warning comment: `-- Warning: Circular view dependencies detected`
+2. Lists affected views in comments
+3. Dumps remaining views in alphabetical order
+4. Continues with dump (doesn't fail)
+
+### Materialized Views
+
+Materialized views are exported using a two-phase approach:
+
+1. **Structure Phase:** `CREATE MATERIALIZED VIEW ... WITH NO DATA`
+2. **Refresh Phase (Deferred):** `REFRESH MATERIALIZED VIEW ...`
+
+This approach:
+
+- Avoids computing view data before dependent objects exist
+- Allows indexes to be created before data is populated
+- Simplifies dependency resolution (no topological sort needed)
+
+### Generated Columns (PostgreSQL 12+)
+
+Generated columns are fully supported:
+
+```php
+// In TableActions.php getTableAttributes():
+if ($this->connection->major_version >= 12) {
+    $attgeneratedField = "a.attgenerated,";  // Add to query
+}
+
+// In TableDumper.php:
+if (isset($atts->fields['attgenerated']) && $atts->fields['attgenerated'] === 's') {
+    $this->write(" GENERATED ALWAYS AS ({$atts->fields['adsrc']}) STORED");
+}
+```
+
+Generated columns:
+
+- Are dumped inline with table structure (functions exist first)
+- Support expressions that reference functions
+- Are automatically excluded from COPY data (computed during restore)
+
+### Sequence Ownership Validation
+
+Sequence ownership statements are deferred and validated:
+
+```php
+// Deferred in SequenceDumper:
+$this->parentDumper->addDeferredSequenceOwnership($schema, $sequence, $table, $column);
+
+// Applied in SchemaDumper after checking table was dumped:
+if (!$this->isTableDumped($schema, $table)) {
+    $this->write("-- Skipping ownership: table $schema.$table not found\n");
+    continue;
+}
+```
+
+This prevents ownership errors when:
+
+- Tables are filtered from export
+- Sequences reference dropped columns
+- Selective object export is used
+
+### Comment Format Standards
+
+Deferred sections use informational comments:
+
+```sql
+--
+-- Refresh Materialized Views
+--
+
+-- Refreshing materialized view public.sales_summary
+REFRESH MATERIALIZED VIEW public.sales_summary;
+
+--
+-- Deferred Triggers
+--
+
+-- Trigger on public.users
+CREATE TRIGGER audit_trigger ...;
+
+--
+-- Sequence Ownerships
+--
+
+-- Skipping ownership: table public.old_table not found
+ALTER SEQUENCE public.user_id_seq OWNED BY public.users.id;
+```
+
+### Benefits of Deferred Architecture
+
+1. **Correctness:** Guarantees successful restore by resolving dependencies
+2. **Flexibility:** Supports partial exports (filtered objects)
+3. **Maintainability:** Clear separation between structure and deferred objects
+4. **Performance:** Allows optimal import order (constraints after data)
+5. **Robustness:** Handles edge cases (missing tables, circular dependencies)
+6. **Standards Compliance:** Uses `SET check_function_bodies = false` (same as pg_dump)
+
+### Chunked Import Compatibility
+
+The dump architecture is compatible with chunked SQL imports:
+
+- **No transactions used:** Each statement is independent
+- **Per-chunk SET commands:** Settings like `check_function_bodies` apply to each chunk
+- **Idempotent operations:** Deferred statements can be rerun safely
+- **Clear section markers:** Comments help identify where chunks were split
+
+### Implementation Files
+
+| Component          | File                                  | Purpose                                |
+| ------------------ | ------------------------------------- | -------------------------------------- |
+| Main orchestration | `SchemaDumper.php`                    | Dump ordering and deferred collections |
+| Trigger deferral   | `TableDumper.php`, `ViewDumper.php`   | Collect triggers instead of writing    |
+| Rule deferral      | `TableDumper.php`, `ViewDumper.php`   | Collect rules instead of writing       |
+| Sequence ownership | `SequenceDumper.php`                  | Defer ownership statements             |
+| Generated columns  | `TableActions.php`, `TableDumper.php` | Query and dump generated columns       |
+| View sorting       | `SchemaDumper.php`                    | Topological sort with cycle detection  |
+| Parent reference   | `ExportDumper.php`                    | Enable sub-dumper access to parent     |
+
+### Testing the Deferred System
+
+Test cases to verify the architecture:
+
+```sql
+-- Test 1: Trigger referencing function referencing table
+CREATE FUNCTION get_user_count() RETURNS int AS $$
+    SELECT COUNT(*) FROM users;  -- References table
+$$ LANGUAGE sql;
+
+CREATE TABLE users (id serial, name text);
+
+CREATE TRIGGER count_trigger AFTER INSERT ON users
+    EXECUTE FUNCTION log_user_count();  -- References function
+
+-- Expected: Function created first, trigger deferred
+
+-- Test 2: Nested views
+CREATE VIEW active_users AS SELECT * FROM users WHERE active = true;
+CREATE VIEW premium_users AS SELECT * FROM active_users WHERE premium = true;
+
+-- Expected: Topologically sorted (active_users before premium_users)
+
+-- Test 3: Generated column with function
+CREATE FUNCTION calculate_discount(price numeric) RETURNS numeric AS $$
+    SELECT price * 0.9;
+$$ LANGUAGE sql;
+
+CREATE TABLE products (
+    price numeric,
+    discount_price numeric GENERATED ALWAYS AS (calculate_discount(price)) STORED
+);
+
+-- Expected: Function before table, generated column inline
+
+-- Test 4: Sequence ownership with filtered export
+-- Export only 'users' table, not 'orders' table
+-- Sequence 'order_id_seq' owned by 'orders.id'
+
+-- Expected: Ownership skipped with comment
+```
+
+---

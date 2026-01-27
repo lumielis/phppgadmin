@@ -78,6 +78,12 @@ function doDefault($msg = '')
 		],
 	];
 
+	$isSchemaCatalog = $misc->isCatalogSchema();
+	if ($isSchemaCatalog) {
+		$actions = [];
+		unset($columns['actions']);
+	}
+
 	$misc->printTable($cfgs, $columns, $actions, 'fulltext-fulltext', $lang['strftsnoconfigs']);
 
 	$navlinks = [
@@ -98,7 +104,9 @@ function doDefault($msg = '')
 		]
 	];
 
-	$misc->printNavLinks($navlinks, 'fulltext-fulltext', get_defined_vars());
+	if (!$isSchemaCatalog) {
+		$misc->printNavLinks($navlinks, 'fulltext-fulltext', get_defined_vars());
+	}
 }
 
 function doDropConfig($confirm)
@@ -508,6 +516,12 @@ function doViewDicts($msg = '')
 		],
 	];
 
+	$isSchemaCatalog = $misc->isCatalogSchema();
+	if ($isSchemaCatalog) {
+		$actions = [];
+		unset($columns['actions']);
+	}
+
 	$misc->printTable($dicts, $columns, $actions, 'fulltext-viewdicts', $lang['strftsnodicts']);
 
 	$navlinks = [
@@ -528,7 +542,9 @@ function doViewDicts($msg = '')
 		]
 	];
 
-	$misc->printNavLinks($navlinks, 'fulltext-viewdicts', get_defined_vars());
+	if (!$isSchemaCatalog) {
+		$misc->printNavLinks($navlinks, 'fulltext-viewdicts', get_defined_vars());
+	}
 }
 
 
@@ -608,6 +624,12 @@ function doViewConfig($ftscfg, $msg = '')
 
 	];
 
+	$isCatalogSchema = $misc->isCatalogSchema();
+	if ($isCatalogSchema) {
+		$actions = [];
+		unset($columns['actions']);
+	}
+
 	$misc->printTable($map, $columns, $actions, 'fulltext-viewconfig', $lang['strftsemptymap']);
 
 	$navlinks = [
@@ -628,7 +650,9 @@ function doViewConfig($ftscfg, $msg = '')
 		]
 	];
 
-	$misc->printNavLinks($navlinks, 'fulltext-viewconfig', get_defined_vars());
+	if (!$isCatalogSchema) {
+		$misc->printNavLinks($navlinks, 'fulltext-viewconfig', get_defined_vars());
+	}
 }
 
 /**

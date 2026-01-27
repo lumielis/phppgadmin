@@ -100,6 +100,7 @@ export const getServerCaps = (fileInput) => {
 	};
 };
 
+/*
 export const logImport = (msg, type, time) => {
 	const importLog = el("importLog");
 	if (!importLog) return;
@@ -122,6 +123,72 @@ export const logImport = (msg, type, time) => {
 	//importLog.textContent += line + "\n";
 	importLog.scrollTop = importLog.scrollHeight;
 	console.log(msg);
+};
+*/
+
+export const logImport = (msg, type = "info", time, entry) => {
+	const importLog = el("importLog");
+	if (!importLog) return;
+
+	if (type == "streaming_summary") {
+		console.log(entry);
+		return;
+	}
+
+	let timeMs =
+		typeof time === "number"
+			? time > 1e11
+				? time
+				: time * 1000
+			: Date.now();
+
+	//const ts = new Date(timeMs).toISOString();
+
+	const wrapper = document.createElement("div");
+	wrapper.className = `log-line log-${type}`;
+
+	// Timestamp
+	const tsSpan = document.createElement("span");
+	tsSpan.className = "log-ts";
+	//tsSpan.textContent = `[${ts}] `;
+
+	const dt = new Date(timeMs);
+
+	const dateStr = dt.toLocaleDateString("sv-SE");
+	const timeStr = dt.toLocaleTimeString("sv-SE", { hour12: false });
+
+	const offsetMin = dt.getTimezoneOffset();
+	const sign = offsetMin <= 0 ? "+" : "-";
+	const hh = String(Math.floor(Math.abs(offsetMin) / 60)).padStart(2, "0");
+	const offset = `${sign}${hh}`;
+
+	tsSpan.innerHTML =
+		`[<span class="log-date">${dateStr}</span>` +
+		` <span class="log-time">${timeStr}</span>` +
+		`<span class="log-tz">${offset}</span>] `;
+
+	wrapper.appendChild(tsSpan);
+
+	// Content
+	const contentSpan = document.createElement("span");
+	contentSpan.className = `log-content log-${type}`;
+
+	// Level
+	const levelSpan = document.createElement("span");
+	levelSpan.className = `log-level log-${type}`;
+	levelSpan.textContent = `${type}: `;
+	contentSpan.appendChild(levelSpan);
+
+	// Message
+	const msgSpan = document.createElement("span");
+	msgSpan.className = "log-msg";
+	msgSpan.textContent = msg;
+	contentSpan.appendChild(msgSpan);
+
+	wrapper.appendChild(contentSpan);
+
+	importLog.appendChild(wrapper);
+	importLog.scrollTop = importLog.scrollHeight;
 };
 
 export function appendServerToUrl(url) {

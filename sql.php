@@ -102,10 +102,21 @@ function renderQueryResult($result, $query, $lineInfo = null)
 		foreach ($rs->fields as $k => $v) {
 			$finfo = $rs->fetchField($k);
 			$isArray = substr_compare($finfo->type, '_', 0, 1) === 0;
-			$array = $isArray ? "array" : "no-array";
+			$class = $isArray ? "array" : "no-array";
 			$hasLineBreak = isset($v) && str_contains($v, "\n");
-			$lineBreak = $hasLineBreak ? "line-break" : "no-line-break";
-			echo "<td class=\"auto-wrap field $finfo->type $array $lineBreak\">\n";
+			$class .= $hasLineBreak ? " line-break" : " no-line-break";
+			if (!$hasLineBreak && is_string($v)) {
+				if (strlen($v) > 2100) {
+					$class .= " full-width";
+				} elseif (strlen($v) > 1050) {
+					$class .= " large-width";
+				} elseif (strlen($v) > 500) {
+					$class .= " medium-width";
+				} elseif (strlen($v) > 100) {
+					$class .= " small-width";
+				}
+			}
+			echo "<td class=\"auto-wrap field $finfo->type $class\">\n";
 			echo "<div class=\"wrapper\">\n";
 			echo $misc->printVal($v, $finfo->type, array('null' => true));
 			echo "</div>\n";
@@ -160,7 +171,15 @@ if (!$isUpload) {
 		$script .= ';';
 	}
 	$result = SqlParser::parseFromString($script);
-	$statements = $result['statements'];
+	$statements = array_column(
+		array_filter(
+			$result['items'],
+			function ($item) {
+				return $item['type'] === 'statement';
+			}
+		),
+		'content'
+	);
 	$readQueryCount = 0;
 	foreach ($statements as $stmt) {
 		if (isSqlReadQuery($stmt, false)) {

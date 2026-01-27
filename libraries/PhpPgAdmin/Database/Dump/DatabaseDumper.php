@@ -75,6 +75,7 @@ class DatabaseDumper extends ExportDumper
         $selectedSchemas = $options['objects'] ?? [];
         $selectedSchemas = array_combine($selectedSchemas, $selectedSchemas);
         unset($options['objects']);
+        $options['include_schema_objects'] = true;
 
         // Iterate through schemas
         $schemaActions = new SchemaActions($this->connection);

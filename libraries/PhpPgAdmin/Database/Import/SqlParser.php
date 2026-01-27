@@ -4,13 +4,6 @@ namespace PhpPgAdmin\Database\Import;
 
 class SqlParser
 {
-    /**
-     * Returns epoch milliseconds for log timestamps.
-     */
-    private static function nowMs(): int
-    {
-        return (int) (microtime(true) * 1000);
-    }
 
     /**
      * Attempt to stream/split an INSERT ... VALUES statement at $start.
@@ -239,11 +232,11 @@ class SqlParser
     }
 
     /**
-     * Skip whitespace, comments, and psql meta-commands (\\... lines)
-     * starting at $pos.
+     * Skip whitespace and comments starting at $pos.
+     * Does NOT skip psql meta-commands (they're now returned as items).
      * Returns the next position where a real SQL token may begin.
      */
-    private static function skipNoise(string $buf, int $pos, int $len, ?array &$meta = null): int
+    private static function skipNoise(string $buf, int $pos, int $len): int
     {
         while ($pos < $len) {
             // skip whitespace
@@ -273,18 +266,6 @@ class SqlParser
                 continue;
             }
 
-            // psql meta-command line starting with backslash
-            if ($buf[$pos] === '\\') {
-                $startLine = $pos;
-                while ($pos < $len && $buf[$pos] !== "\n") {
-                    $pos++;
-                }
-                if ($meta !== null) {
-                    $meta[] = rtrim(substr($buf, $startLine, $pos - $startLine), "\r\n");
-                }
-                continue;
-            }
-
             break; // nothing skipped => meaningful token at $pos
         }
         return $pos;
@@ -293,27 +274,25 @@ class SqlParser
 
     /**
      * Parse from a raw string chunk plus existing buffer. Useful for HTTP streaming.
-     * Returns same structure as parseFromReader; 'eof' is false by default.
+     * Returns ordered items array with statements and meta-commands in sequence.
      */
     public static function parseFromString(string $data, string $existingBuffer = '', bool $eof = false, bool $stdConformingInitial = true): array
     {
         // Reuse the logic of parseFromReader by inlining the same steps
         $buf = $existingBuffer . $data;
         $len = strlen($buf);
-        $meta = [];
         if ($len === 0) {
             return [
-                'statements' => [],
+                'items' => [],
                 'consumed' => 0,
                 'eof' => $eof,
                 'remainder' => $existingBuffer,
-                'meta' => $meta,
                 'standard_conforming_strings' => $stdConformingInitial,
             ];
         }
 
-        $statements = [];
-        $start = self::skipNoise($buf, 0, $len, $meta);
+        $items = [];
+        $start = self::skipNoise($buf, 0, $len);
         $inSingle = false;
         $stringBackslashEscapes = false;
         $inDouble = false;
@@ -390,7 +369,7 @@ class SqlParser
                 }
                 // Re-align start if we're still at statement start
                 if ($start === $i) {
-                    $start = self::skipNoise($buf, $start, $len, $meta);
+                    $start = self::skipNoise($buf, $start, $len);
                 }
                 continue;
             }
@@ -428,8 +407,9 @@ class SqlParser
                     while ($i < $len && $buf[$i] !== "\n") {
                         $i++;
                     }
-                    $meta[] = rtrim(substr($buf, $lineStart, $i - $lineStart), "\r\n");
-                    $start = self::skipNoise($buf, $i + 1, $len, $meta);
+                    $metaCmd = rtrim(substr($buf, $lineStart, $i - $lineStart), "\r\n");
+                    $items[] = ['type' => 'meta', 'content' => $metaCmd];
+                    $start = self::skipNoise($buf, $i + 1, $len);
                     $i = $start - 1;
                     continue;
                 }
@@ -452,7 +432,7 @@ class SqlParser
                 if (is_array($ins)) {
                     if (!empty($ins['statements'])) {
                         foreach ($ins['statements'] as $s) {
-                            $statements[] = $s;
+                            $items[] = ['type' => 'statement', 'content' => $s];
                         }
                     }
                     if (isset($ins['newStart'])) {
@@ -462,11 +442,10 @@ class SqlParser
                     }
                     if (isset($ins['remainder'])) {
                         return [
-                            'statements' => $statements,
+                            'items' => $items,
                             'consumed' => strlen($data),
                             'eof' => $eof,
                             'remainder' => (string) $ins['remainder'],
-                            'meta' => $meta,
                             'standard_conforming_strings' => $stdConforming,
                         ];
                     }
@@ -475,14 +454,14 @@ class SqlParser
 
             if ($c === ';') {
                 $stmt = substr($buf, $start, $i - $start + 1);
-                $statements[] = $stmt;
+                $items[] = ['type' => 'statement', 'content' => $stmt];
                 $stmtTrim = strtolower(trim($stmt, " \t\n\r;"));
                 if (preg_match('/^set\s+standard_conforming_strings\s*=\s*off/', $stmtTrim)) {
                     $stdConforming = false;
                 } elseif (preg_match('/^set\s+standard_conforming_strings\s*=\s*on/', $stmtTrim)) {
                     $stdConforming = true;
                 }
-                $start = self::skipNoise($buf, $i + 1, $len, $meta);
+                $start = self::skipNoise($buf, $i + 1, $len);
             }
         }
 
@@ -493,11 +472,10 @@ class SqlParser
         $consumed = strlen($data);
 
         return [
-            'statements' => $statements,
+            'items' => $items,
             'consumed' => $consumed,
             'eof' => $eof,
             'remainder' => $remainder,
-            'meta' => $meta,
             'standard_conforming_strings' => $stdConforming,
         ];
     }

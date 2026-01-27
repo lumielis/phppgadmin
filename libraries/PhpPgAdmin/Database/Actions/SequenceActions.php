@@ -2,9 +2,9 @@
 
 namespace PhpPgAdmin\Database\Actions;
 
-use PhpPgAdmin\Database\AppActions;
 
-class SequenceActions extends AppActions
+
+class SequenceActions extends ActionsBase
 {
     // Base constructor inherited from Actions
 
@@ -36,39 +36,94 @@ class SequenceActions extends AppActions
         $this->connection->fieldClean($sequence);
         $this->connection->clean($c_sequence);
 
-        $join = '';
-        if ($this->hasSequencePrivilege($sequence) === 't') {
-            $join = "CROSS JOIN \"{$c_schema}\".\"{$c_sequence}\" AS s";
-        } else {
-            $join = 'CROSS JOIN ( values (null, null, null) ) AS s (last_value, log_cnt, is_called) ';
+        // -----------------------------------------
+        // PostgreSQL 10+ (pg_sequence exists)
+        // -----------------------------------------
+        if ($this->connection->major_version >= 10) {
+
+            $join = '';
+            if ($this->hasSequencePrivilege($sequence) === 't') {
+                $join = "CROSS JOIN \"{$c_schema}\".\"{$c_sequence}\" AS s";
+            } else {
+                $join = 'CROSS JOIN ( values (null, null, null) ) AS s (last_value, log_cnt, is_called) ';
+            }
+
+            $sql =
+                "SELECT
+                    c.relname AS seqname,
+                    s.last_value, s.log_cnt, s.is_called,
+                    m.seqstart AS start_value,
+                    m.seqincrement AS increment_by,
+                    m.seqmax AS max_value,
+                    m.seqmin AS min_value,
+                    m.seqcache AS cache_value,
+                    m.seqcycle AS is_cycled,
+                    pg_catalog.obj_description(c.oid, 'pg_class') as seqcomment,
+                    pg_catalog.pg_get_userbyid(c.relowner) as seqowner,
+                    n.nspname,
+                    t.relname AS owned_table,
+                    a.attname AS owned_column
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_sequence m ON m.seqrelid = c.oid
+                LEFT JOIN pg_depend d ON d.objid = c.oid AND d.deptype = 'a'
+                LEFT JOIN pg_class t ON t.oid = d.refobjid
+                LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+                {$join}
+                WHERE c.relkind = 'S'
+                AND c.relname = '{$c_sequence}'
+                AND n.nspname = '{$c_schema}'
+            ";
+
+            return $this->connection->selectSet($sql);
         }
+
+        // -----------------------------------------
+        // PostgreSQL 9.0–9.6 (no pg_sequence)
+        // -----------------------------------------
+        // We must read sequence metadata from the sequence itself
+        // and join pg_class/pg_depend manually.
+        // -----------------------------------------
 
         $sql =
             "SELECT
                 c.relname AS seqname,
-                s.last_value, s.log_cnt, s.is_called,
-                m.seqstart AS start_value, m.seqincrement AS increment_by, m.seqmax AS max_value, m.seqmin AS min_value,
-                m.seqcache AS cache_value, m.seqcycle AS is_cycled,
+                s.last_value,
+                s.log_cnt,
+                s.is_called,
+                s.start_value,
+                s.increment_by,
+                s.max_value,
+                s.min_value,
+                s.cache_value,
+                s.is_cycled,
                 pg_catalog.obj_description(c.oid, 'pg_class') as seqcomment,
                 pg_catalog.pg_get_userbyid(c.relowner) as seqowner,
                 n.nspname,
                 t.relname AS owned_table,
                 a.attname AS owned_column
-            FROM pg_catalog.pg_class c
-            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-            JOIN pg_catalog.pg_sequence m ON m.seqrelid = c.oid
-            LEFT JOIN pg_depend d
-                ON d.objid = c.oid AND d.deptype = 'a'
-            LEFT JOIN pg_class t
-                ON t.oid = d.refobjid
-            LEFT JOIN pg_attribute a
-                ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
-                {$join}
-            WHERE
-                c.relkind IN ('S')
-                AND c.relname = '{$c_sequence}'
-                AND n.nspname = '{$c_schema}'
-            ";
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_depend d ON d.objid = c.oid AND d.deptype = 'a'
+            LEFT JOIN pg_class t ON t.oid = d.refobjid
+            LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+            CROSS JOIN (
+                SELECT
+                    last_value,
+                    log_cnt,
+                    is_called,
+                    start_value,
+                    increment_by,
+                    max_value,
+                    min_value,
+                    cache_value,
+                    is_cycled
+                FROM \"{$c_schema}\".\"{$c_sequence}\"
+            ) AS s
+            WHERE c.relkind = 'S'
+            AND c.relname = '{$c_sequence}'
+            AND n.nspname = '{$c_schema}'
+        ";
 
         return $this->connection->selectSet($sql);
     }
@@ -76,46 +131,41 @@ class SequenceActions extends AppActions
     /**
      * Returns all sequences in the current database.
      */
-    public function getSequences($all = false)
+    public function getSequences()
     {
-        if ($all) {
-            $sql = "
-                SELECT
-                    n.nspname,
-                    c.relname AS seqname,
-                    pg_catalog.pg_get_userbyid(c.relowner) as seqowner
-                FROM
-                    pg_catalog.pg_class c
-                    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                WHERE
-                    c.relkind IN ('S')
-                    AND n.nspname NOT IN ('pg_catalog','information_schema')
-                    AND n.nspname !~ '^pg_toast'
-                    AND pg_catalog.pg_table_is_visible(c.oid)
-                ORDER BY
-                    nspname, seqname;
-            ";
-        } else {
-            $c_schema = $this->connection->_schema;
-            $this->connection->clean($c_schema);
-            $sql = "
-                SELECT
-                    n.nspname,
-                    c.relname AS seqname,
-                    pg_catalog.obj_description(c.oid, 'pg_class') AS seqcomment,
-                    (SELECT spcname FROM pg_catalog.pg_tablespace pt WHERE pt.oid=c.reltablespace) AS tablespace,
-                    pg_catalog.pg_get_userbyid(c.relowner) as seqowner
-                FROM
-                    pg_catalog.pg_class c
-                    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-                WHERE
-                    c.relkind IN ('S')
-                    AND n.nspname = '{$c_schema}'
-                    AND pg_catalog.pg_table_is_visible(c.oid)
-                ORDER BY
-                    nspname, seqname;
-            ";
-        }
+        $c_schema = $this->connection->_schema;
+        $this->connection->clean($c_schema);
+
+        $sql =
+            "SELECT
+                n.nspname,
+                c.relname AS seqname,
+                pg_catalog.obj_description(c.oid, 'pg_class') AS seqcomment,
+                (SELECT spcname
+                    FROM pg_catalog.pg_tablespace pt
+                    WHERE pt.oid = c.reltablespace) AS tablespace,
+                pg_catalog.pg_get_userbyid(c.relowner) AS seqowner,
+                cls.relname AS tablename,
+                att.attname AS columnname
+            FROM
+                pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                LEFT JOIN pg_catalog.pg_depend d
+                    ON d.objid = c.oid
+                    AND d.classid = 'pg_class'::regclass
+                    AND d.refclassid = 'pg_class'::regclass
+                    AND d.deptype = 'a'
+                LEFT JOIN pg_catalog.pg_class cls
+                    ON cls.oid = d.refobjid
+                LEFT JOIN pg_catalog.pg_attribute att
+                    ON att.attrelid = d.refobjid
+                    AND att.attnum = d.refobjsubid
+            WHERE
+                c.relkind = 'S'
+                AND n.nspname = '{$c_schema}'
+                AND pg_catalog.pg_table_is_visible(c.oid)
+            ORDER BY
+                nspname, seqname";
 
         return $this->connection->selectSet($sql);
     }
