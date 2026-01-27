@@ -4,6 +4,8 @@ namespace PhpPgAdmin\Database\Dump;
 
 use PhpPgAdmin\Database\Actions\ViewActions;
 use PhpPgAdmin\Database\Actions\SchemaActions;
+use PhpPgAdmin\Database\Dump\DependencyGraph\DependencyGraph;
+use PhpPgAdmin\Database\Dump\DependencyGraph\DependencyAnalyzer;
 
 /**
  * Orchestrator dumper for a PostgreSQL schema.
@@ -21,7 +23,15 @@ class SchemaDumper extends ExportDumper
     private $deferredRules = [];
     private $deferredSequenceOwnerships = [];
     private $deferredMaterializedViewRefreshes = [];
+    private $deferredForeignKeys = [];
     private $dumpedTables = [];
+    private $dumpedFunctions = [];
+    private $dumpedDomains = [];
+
+    /**
+     * @var DependencyGraph|null Dependency graph for smart ordering
+     */
+    private $dependencyGraph = null;
 
     public function dump($subject, array $params, array $options = [])
     {
@@ -59,49 +69,44 @@ class SchemaDumper extends ExportDumper
             $this->write("CREATE SCHEMA " . $this->getIfNotExists($options) . $this->schemaQuoted . ";\n");
         }
 
-        // 1. Domains and Types
+        // 1. Non-composite types (enums, base types) - no dependency issues
         if ($includeSchemaObjects) {
-            $this->dumpDomainsAndTypes($schema, $options);
+            $this->dumpSimpleTypes($schema, $options);
         }
 
         // 2. Sequences (without ownership - deferred)
         $this->dumpSequences($schema, $options);
 
-        // 3. Functions (moved before tables to resolve dependencies)
-        // With check_function_bodies = false, functions can reference tables that don't exist yet
-        if ($includeSchemaObjects) {
-            $this->dumpFunctions($schema, $options);
-        }
-
-        // 4. Aggregates
-        if ($includeSchemaObjects) {
-            $this->dumpAggregates($schema, $options);
-        }
-
-        // 5. Operators
+        // 3. Operators
         if ($includeSchemaObjects) {
             $this->dumpOperators($schema, $options);
         }
 
-        // 6. Tables (structure with defaults and check constraints, but NO triggers/rules)
-        $this->dumpTables($schema, $options);
+        // 4. UNIFIED TOPOLOGICAL DUMP: Functions, Tables, Domains with dependency analysis
+        $this->dumpObjectsTopologically($schema, $options);
 
-        // 7. Views (regular views, triggers/rules deferred)
+        // 5. Aggregates (after functions, since they depend on SFUNC/FINALFUNC)
+        if ($includeSchemaObjects) {
+            $this->dumpAggregates($schema, $options);
+        }
+
+        // 6. Views (regular views with dependency sorting)
         $this->dumpViews($schema, $options);
 
-        // 8. Materialized Views (WITH NO DATA, refresh deferred)
+        // 7. Materialized Views (WITH NO DATA, refresh deferred)
         if ($includeSchemaObjects) {
             $this->dumpMaterializedViews($schema, $options);
         }
 
-        // 9. Apply deferred objects after all structure is created
+        // 8. Apply deferred objects after all structure is created
+        $this->applyDeferredForeignKeys($options);
         $this->applyDeferredMaterializedViewRefreshes($options);
         $this->applyDeferredViews($schema, $options);
         $this->applyDeferredRules($options);
         $this->applyDeferredTriggers($options);
         $this->applyDeferredSequenceOwnerships($options);
 
-        // 10. Privileges
+        // 9. Privileges
         $this->writePrivileges(
             $schema,
             'schema',
@@ -116,127 +121,300 @@ class SchemaDumper extends ExportDumper
         $this->writeFooter();
     }
 
-    protected function dumpDomainsAndTypes($schema, $options)
+    /**
+     * Dump simple types (enums, base types) that don't have constraint dependencies.
+     *
+     * @param string $schema Schema name
+     * @param array $options Dump options
+     */
+    protected function dumpSimpleTypes($schema, $options)
     {
-        // 1. Get types
-        $types = $this->connection->selectSet(
-            "SELECT t.oid, t.typname, t.typtype, t.typnamespace, t.typbasetype
-                FROM pg_type t
-                JOIN pg_namespace n ON n.oid = t.typnamespace
-                WHERE n.nspname = '{$this->schemaEscaped}'
-                AND t.typtype IN ('b','c','d','e')
-                AND t.typelem = 0  -- Exclude array types
-                AND (t.typrelid = 0 OR EXISTS (
-                    SELECT 1 FROM pg_class c 
-                    WHERE c.oid = t.typrelid 
-                    AND c.relkind = 'c'
-                ))  -- Include types tied to composite tables
-                ORDER BY t.oid"
-        );
-
-        // 2. Get dependencies
-        $deps = $this->connection->selectSet(
-            "SELECT d.objid AS type_oid, d.refobjid AS depends_on_oid
-                FROM pg_depend d
-                JOIN pg_type t ON t.oid = d.objid
-                WHERE d.classid = 'pg_type'::regclass
-                AND d.refclassid = 'pg_type'::regclass
-                AND d.deptype IN ('n','i')"
-        );
-
-        // 3. Build arrays
-        $typeList = [];
-        while ($types && !$types->EOF) {
-            $typeList[$types->fields['oid']] = $types->fields;
-            $types->moveNext();
-        }
-
-        $depList = [];
-        while ($deps && !$deps->EOF) {
-            $depList[] = $deps->fields;
-            $deps->moveNext();
-        }
-
-        // 4. Topologically sort
-        $sortedOids = $this->sortTypesTopologically($typeList, $depList);
-
-        // 5. Dumper
-        $domainDumper = $this->createSubDumper('domain');
-        $typeDumper = $this->createSubDumper('type');
-
-        $this->write("\n-- Domains in schema $this->schemaQuoted\n");
-
-        foreach ($sortedOids as $oid) {
-            $t = $typeList[$oid];
-
-            if ($t['typtype'] === 'd') {
-                $domainDumper->dump('domain', [
-                    'schema' => $schema,
-                    'domain' => $t['typname'],
-                ], $options);
-            }
-        }
-
         $this->write("\n-- Types in schema $this->schemaQuoted\n");
 
-        foreach ($sortedOids as $oid) {
-            $t = $typeList[$oid];
+        // When specific objects are selected, check if dependencies should be included
+        if ($this->hasObjectSelection) {
 
-            if ($t['typtype'] !== 'd') {
-                $typeDumper->dump('type', [
-                    'schema' => $schema,
-                    'type' => $t['typname'],
-                ], $options);
+            if (!$options['include_dependencies'] ?? false) {
+                // Skip types entirely when dependencies are disabled (pg_dump behavior)
+                return;
             }
+
+            // Get types used by selected tables
+            $selectedTableList = '';
+            $sep = '';
+            foreach (array_keys($this->selectedObjects) as $name) {
+                $selectedTableList .= $sep;
+                $selectedTableList .= $this->connection->escapeLiteral($name);
+                $sep = ',';
+            }
+            $types = $this->connection->selectSet(
+                "SELECT DISTINCT t.oid, t.typname, t.typtype
+                    FROM pg_type t
+                    JOIN pg_namespace n ON n.oid = t.typnamespace
+                    JOIN pg_attribute a ON a.atttypid = t.oid
+                    JOIN pg_class c ON c.oid = a.attrelid
+                    WHERE n.nspname = '{$this->schemaEscaped}'
+                    AND c.relname IN ($selectedTableList)
+                    AND c.relkind IN ('r', 'v', 'm')
+                    AND t.typtype IN ('b','e')
+                    AND t.typelem = 0
+                    AND a.attnum > 0
+                    AND NOT a.attisdropped
+                    ORDER BY t.typname"
+            );
+        } else {
+            // Dump all types when no specific objects selected
+            $types = $this->connection->selectSet(
+                "SELECT t.oid, t.typname, t.typtype
+                    FROM pg_type t
+                    JOIN pg_namespace n ON n.oid = t.typnamespace
+                    WHERE n.nspname = '{$this->schemaEscaped}'
+                    AND t.typtype IN ('b','e')  -- Base and enum types only
+                    AND t.typelem = 0  -- Exclude array types
+                    ORDER BY t.typname"
+            );
+        }
+
+        if (!$types || $types->EOF) {
+            return;
+        }
+
+        $typeDumper = $this->createSubDumper('type');
+
+        while (!$types->EOF) {
+            $typeDumper->dump('type', [
+                'schema' => $schema,
+                'type' => $types->fields['typname'],
+            ], $options);
+            $types->moveNext();
         }
     }
 
-    protected function sortTypesTopologically(array $types, array $deps)
+    /**
+     * Dump functions, tables, and domains in topologically sorted order.
+     *
+     * @param string $schema Schema name
+     * @param array $options Dump options
+     */
+    protected function dumpObjectsTopologically($schema, $options)
     {
-        // Build graph
-        $graph = [];
-        $incoming = [];
+        $includeSchemaObjects = $options['include_schema_objects'] ?? true;
 
-        foreach ($types as $t) {
-            $oid = $t['oid'];
-            $graph[$oid] = [];
-            $incoming[$oid] = 0;
+        // Build dependency graph
+        $analyzer = new DependencyAnalyzer($this->connection, [$schema]);
+        $this->dependencyGraph = $analyzer->buildGraph();
+
+        // Check for circular dependencies
+        if ($this->dependencyGraph->hasCircularDependencies()) {
+            $this->writeCircularDependencyWarning();
         }
 
-        foreach ($deps as $d) {
-            $from = $d['type_oid'];
-            $to = $d['depends_on_oid'];
+        // Get sorted nodes
+        $sortedNodes = $this->dependencyGraph->getSortedNodes();
 
-            if (isset($graph[$from]) && isset($graph[$to])) {
-                $graph[$from][] = $to;
-                $incoming[$to]++;
-            }
-        }
+        // Dump each object in topologically sorted order
+        foreach ($sortedNodes as $node) {
+            // Check if object should be included based on selection
+            if ($this->hasObjectSelection) {
+                // Option to include dependencies (types, domains, functions) when selecting specific tables
+                // Default: false (match pg_dump minimal output)
+                // Set to true to include all dependent objects
+                $includeDependencies = $options['include_dependencies'] ?? false;
 
-        // Nodes without incoming edges
-        $queue = [];
-        foreach ($incoming as $oid => $count) {
-            if ($count === 0) {
-                $queue[] = $oid;
-            }
-        }
+                // Tables: only if explicitly selected
+                // Domains/Functions: include if used by selected tables (dependencies)
+                if ($node->type === 'table') {
+                    if (!isset($this->selectedObjects[$node->name])) {
+                        continue;
+                    }
+                } elseif ($node->type === 'domain' || $node->type === 'function') {
+                    // Skip dependencies if user wants pg_dump-style minimal output
+                    if (!$includeDependencies) {
+                        continue;
+                    }
 
-        $sorted = [];
-
-        while (!empty($queue)) {
-            $oid = array_shift($queue);
-            $sorted[] = $oid;
-
-            foreach ($graph[$oid] as $dep) {
-                $incoming[$dep]--;
-                if ($incoming[$dep] === 0) {
-                    $queue[] = $dep;
+                    // Check if this domain/function is a dependency of any selected table
+                    if (!$this->isDependencyOfSelectedObjects($node)) {
+                        continue;
+                    }
                 }
             }
+
+            // Pass dependency graph to sub-dumpers for smart deferral
+            $dumpOptions = $options;
+            $dumpOptions['dependency_graph'] = $this->dependencyGraph;
+
+            switch ($node->type) {
+                case 'function':
+                    if ($includeSchemaObjects) {
+                        $this->dumpSingleFunction($node, $schema, $dumpOptions);
+                    }
+                    break;
+
+                case 'table':
+                    $this->dumpSingleTable($node, $schema, $dumpOptions);
+                    break;
+
+                case 'domain':
+                    if ($includeSchemaObjects) {
+                        $this->dumpSingleDomain($node, $schema, $dumpOptions);
+                    }
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Dump a single function by node.
+     *
+     * @param \PhpPgAdmin\Database\Dump\DependencyGraph\ObjectNode $node Function node
+     * @param string $schema Schema name
+     * @param array $options Dump options
+     */
+    protected function dumpSingleFunction($node, $schema, $options)
+    {
+        $dumper = $this->createSubDumper('function');
+        $dumper->dump('function', [
+            'function_oid' => $node->oid,
+            'schema' => $schema,
+        ], $options);
+
+        $this->dumpedFunctions[$node->oid] = true;
+    }
+
+    /**
+     * Dump a single table by node.
+     *
+     * @param \PhpPgAdmin\Database\Dump\DependencyGraph\ObjectNode $node Table node
+     * @param string $schema Schema name
+     * @param array $options Dump options
+     */
+    protected function dumpSingleTable($node, $schema, $options)
+    {
+        $dumper = $this->createSubDumper('table');
+        $dumper->dump('table', [
+            'table' => $node->name,
+            'schema' => $schema,
+        ], $options);
+    }
+
+    /**
+     * Dump a single domain by node.
+     *
+     * @param \PhpPgAdmin\Database\Dump\DependencyGraph\ObjectNode $node Domain node
+     * @param string $schema Schema name
+     * @param array $options Dump options
+     */
+    protected function dumpSingleDomain($node, $schema, $options)
+    {
+        $dumper = $this->createSubDumper('domain');
+        $dumper->dump('domain', [
+            'domain' => $node->name,
+            'schema' => $schema,
+        ], $options);
+
+        $this->dumpedDomains[$node->oid] = true;
+    }
+
+    /**
+     * Check if a node (domain/function) is a dependency of any selected table.
+     *
+     * @param \PhpPgAdmin\Database\Dump\DependencyGraph\ObjectNode $node Node to check
+     * @return bool True if node is needed by a selected table
+     */
+    protected function isDependencyOfSelectedObjects($node)
+    {
+        if (!$this->dependencyGraph) {
+            return false;
         }
 
-        return $sorted;
+        // Check if any selected table has an incoming edge FROM this node
+        // Edge direction: dependency → dependent (e.g., domain → table)
+        // So we check if this node points TO any selected table
+        foreach (array_keys($this->selectedObjects) as $selectedName) {
+            $selectedNode = $this->findNodeByName($selectedName, 'table');
+            if ($selectedNode && $this->dependencyGraph->hasDependency($node->oid, $selectedNode->oid)) {
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    /**
+     * Find a node by name and type.
+     *
+     * @param string $name Object name
+     * @param string $type Object type
+     * @return \PhpPgAdmin\Database\Dump\DependencyGraph\ObjectNode|null
+     */
+    protected function findNodeByName($name, $type)
+    {
+        if (!$this->dependencyGraph) {
+            return null;
+        }
+
+        foreach ($this->dependencyGraph->getAllNodes() as $node) {
+            if ($node->name === $name && $node->type === $type) {
+                return $node;
+            }
+        }
+
+        return null;
+        // For dependency purposes we're tracking by OID, which is unique
+        // When dumping, we need to pass the aggregate name and let AggregateDumper handle the details
+
+        $dumper = $this->createSubDumper('aggregate');
+        $dumper->dump('aggregate', [
+            'aggregate' => $node->name,
+            'basetype' => null, // Let AggregateDumper query by name
+            'schema' => $schema,
+        ], $options);
+    }
+
+    /**
+     * Write warning about circular dependencies.
+     */
+    protected function writeCircularDependencyWarning()
+    {
+        $this->write("\n");
+        $this->write("--\n");
+        $this->write("-- WARNING: Circular dependency detected\n");
+        $this->write("--\n");
+        $this->write("-- The following objects have circular dependencies that cannot be automatically resolved:\n");
+
+        $circularNodes = $this->dependencyGraph->getCircularNodes();
+        foreach ($circularNodes as $node) {
+            $this->write("--   • " . ucfirst($node->type) . ": " . $node->getQualifiedName() . "\n");
+        }
+
+        $edges = $this->dependencyGraph->getCircularEdges();
+        if (!empty($edges)) {
+            $this->write("--\n");
+            $this->write("-- Dependencies:\n");
+            foreach ($edges as $edge) {
+                $this->write("--   " . $edge['from'] . " (" . $edge['from_type'] . ") → " .
+                    $edge['to'] . " (" . $edge['to_type'] . ")\n");
+            }
+        }
+
+        $this->write("--\n");
+        $this->write("-- RESOLUTION OPTIONS:\n");
+        $this->write("--\n");
+        $this->write("-- Option 1: Temporarily disable function body validation\n");
+        $this->write("--   1. Edit one function definition below\n");
+        $this->write("--   2. Remove the problematic reference temporarily\n");
+        $this->write("--   3. Import this dump\n");
+        $this->write("--   4. Run: ALTER FUNCTION ... (with correct body)\n");
+        $this->write("--\n");
+        $this->write("-- Option 2: Use placeholder functions\n");
+        $this->write("--   1. Create stub versions of functions first\n");
+        $this->write("--   2. Import this dump (functions will replace stubs)\n");
+        $this->write("--\n");
+        $this->write("-- The following objects are dumped in alphabetical order:\n");
+        $this->write("--\n\n");
+    }
+
 
     protected function sortViewsTopologically(array $views, array $deps)
     {
@@ -336,13 +514,30 @@ class SchemaDumper extends ExportDumper
     protected function dumpSequences($schema, $options)
     {
         $this->write("\n-- Sequences in schema $this->schemaQuoted\n");
-        $this->dumpRelkindObjects($schema, $options, 'S', 'sequence');
-    }
+        //$this->dumpRelkindObjects($schema, $options, 'S', 'sequence');
 
-    protected function dumpTables($schema, $options)
-    {
-        $this->write("\n-- Tables in schema $this->schemaQuoted\n");
-        $this->dumpRelkindObjects($schema, $options, 'r', 'table');
+        $sql = "SELECT c.relname
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind = 'S'
+                AND n.nspname = '{$this->schemaEscaped}'
+                ORDER BY c.relname";
+
+        $result = $this->connection->selectSet($sql);
+        $dumper = $this->createSubDumper('sequence');
+
+        while ($result && !$result->EOF) {
+            $name = $result->fields['relname'];
+
+            if (!$this->hasObjectSelection || isset($this->selectedObjects[$name])) {
+                $dumper->dump('sequence', [
+                    'sequence' => $name,
+                    'schema' => $schema,
+                ], $options);
+            }
+
+            $result->moveNext();
+        }
     }
 
     protected function dumpViews($schema, $options)
@@ -432,6 +627,36 @@ class SchemaDumper extends ExportDumper
 
             $result->moveNext();
         }
+    }
+
+    protected function applyDeferredForeignKeys($options)
+    {
+        if (empty($this->deferredForeignKeys)) {
+            return;
+        }
+
+        $this->write("\n");
+        $this->write("--\n");
+        $this->write("-- Foreign Key Constraints (applied after all tables are created)\n");
+        $this->write("--\n\n");
+
+        foreach ($this->deferredForeignKeys as $fk) {
+            $schemaQuoted = $fk['schemaQuoted'];
+            $tableQuoted = $fk['tableQuoted'];
+            $constraintName = $fk['name'];
+            $definition = $fk['definition'];
+
+            $this->write("ALTER TABLE {$schemaQuoted}.{$tableQuoted} ");
+            $this->write("ADD CONSTRAINT {$constraintName} {$definition};\n");
+        }
+    }
+
+    /**
+     * Add a foreign key constraint to be applied after all tables are created.
+     */
+    public function addDeferredForeignKey($fkData)
+    {
+        $this->deferredForeignKeys[] = $fkData;
     }
 
     protected function applyDeferredMaterializedViewRefreshes($options)
@@ -524,31 +749,18 @@ class SchemaDumper extends ExportDumper
         }
     }
 
-    protected function dumpFunctions($schema, $options)
-    {
-        $this->write("\n-- Functions in schema $this->schemaQuoted\n");
-
-        $sql = "SELECT p.oid AS prooid
-                FROM pg_catalog.pg_proc p
-                LEFT JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-                WHERE n.nspname = '{$this->schemaEscaped}'
-                AND p.prokind = 'f'
-                ORDER BY p.proname";
-
-        $functions = $this->connection->selectSet($sql);
-        $dumper = $this->createSubDumper('function');
-
-        while ($functions && !$functions->EOF) {
-            $dumper->dump('function', [
-                'function_oid' => $functions->fields['prooid'],
-                'schema' => $schema,
-            ], $options);
-            $functions->moveNext();
-        }
-    }
-
+    /**
+     * Dump all aggregates in a schema.
+     * Called after functions are dumped, since aggregates depend on SFUNC/FINALFUNC.
+     */
     protected function dumpAggregates($schema, $options)
     {
+        // Skip aggregates when specific objects are selected
+        // Aggregates are schema objects, not table/view data objects
+        if ($this->hasObjectSelection) {
+            return;
+        }
+
         $this->write("\n-- Aggregates in schema $this->schemaQuoted\n");
 
         $sql = "SELECT p.proname,

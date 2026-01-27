@@ -16,9 +16,17 @@
 		"ext-sodium": "*",
 		"greenlion/php-sql-parser": "dev-master"
 	},
+	"require-dev": {
+		"phpunit/phpunit": "^9.0"
+	},
 	"autoload": {
 		"psr-4": {
 			"PhpPgAdmin\\": "libraries/PhpPgAdmin/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"PhpPgAdmin\\Tests\\": "tests/"
 		}
 	},
 	"minimum-stability": "stable"

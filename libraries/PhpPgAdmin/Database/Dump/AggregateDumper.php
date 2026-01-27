@@ -40,9 +40,6 @@ class AggregateDumper extends ExportDumper
 
         // SFUNC (quote + qualify when needed)
         $sfuncQuoted = $this->connection->quoteIdentifier($rs->fields['aggtransfn']);
-        if (!empty($rs->fields['sfuncnspname'])) {
-            $sfuncQuoted = $this->connection->quoteIdentifier($rs->fields['sfuncnspname']) . '.' . $sfuncQuoted;
-        }
         $this->write("    SFUNC = {$sfuncQuoted},\n");
 
         // STYPE comes from format_type(), do not quote

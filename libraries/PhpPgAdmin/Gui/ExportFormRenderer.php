@@ -124,6 +124,7 @@ class ExportFormRenderer
                 -->
                 <?php
                 $objectGroups = $params['objects_by_type'] ?? [];
+                $iconGroups = $params['icons_by_type'] ?? [];
                 $groupLabels = [
                     'databases' => $this->lang['strdatabases'] ?? 'Databases',
                     'schemas' => $this->lang['strschemas'] ?? 'Schemas',
@@ -140,6 +141,7 @@ class ExportFormRenderer
                 ];
                 foreach (array_keys($objectGroups) as $groupKey) {
                     $groupObjects = $objectGroups[$groupKey] ?? [];
+                    $objectIcons = $iconGroups[$groupKey] ?? null;
                     $count = is_array($groupObjects) ? count($groupObjects) : 0;
                     ?>
                     <div class="object-selection-group" data-group="<?= html_esc($groupKey); ?>">
@@ -165,7 +167,8 @@ class ExportFormRenderer
                                     <input type="checkbox" id="<?= html_esc($objId); ?>" name="objects[]"
                                         value="<?= html_esc($objName); ?>" data-group="<?= html_esc($groupKey); ?>" checked="checked" />
                                     <label for="<?= html_esc($objId); ?>">
-                                        <img src="<?= $this->misc->icon($groupIcons[$groupKey] ?? ''); ?>" class="icon">
+                                        <img src="<?= $this->misc->icon($objectIcons[$objName] ?? $groupIcons[$groupKey] ?? ''); ?>"
+                                            class="icon">
                                         <?= html_esc($objName); ?>
                                     </label>
                                 </div>

@@ -392,9 +392,12 @@ function doExport($msg = '')
 	}
 
 	$viewNames = [];
-	$views = $viewActions->getViews();
+	$viewIcons = [];
+	$views = $viewActions->getViews(true, true);
 	while ($views && !$views->EOF) {
-		$viewNames[] = $views->fields['relname'];
+		$viewName = $views->fields['relname'];
+		$viewNames[] = $viewName;
+		$viewIcons[$viewName] = $views->fields['relkind'] == 'm' ? 'MaterializedView' : 'View';
 		$views->moveNext();
 	}
 
@@ -413,7 +416,10 @@ function doExport($msg = '')
 			'tables' => $tableNames,
 			'sequences' => $sequenceNames,
 			'views' => $viewNames,
-		]
+		],
+		'icons_by_type' => [
+			'views' => $viewIcons,
+		],
 	]);
 }
 

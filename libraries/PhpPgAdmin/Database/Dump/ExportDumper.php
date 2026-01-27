@@ -280,4 +280,45 @@ abstract class ExportDumper extends AppContext
         // Default: not supported by this dumper type
         throw new \Exception("Dump method not implemented in " . get_class($this));
     }
+
+
+    /**
+     * Check if a function name is a common built-in.
+     *
+     * @param string $funcName Function name
+     * @return bool True if built-in
+     */
+    public static function isBuiltinFunction($funcName)
+    {
+        static $builtins = array_flip([
+        'now',
+        'current_timestamp',
+        'current_date',
+        'current_time',
+        'nextval',
+        'currval',
+        'setval',
+        'random',
+        'uuid_generate_v4',
+        'lower',
+        'upper',
+        'length',
+        'trim',
+        'count',
+        'sum',
+        'avg',
+        'min',
+        'max',
+        'abs',
+        'round',
+        'floor',
+        'ceil',
+        'coalesce',
+        'nullif',
+        'greatest',
+        'least',
+        ]);
+
+        return isset($builtins[strtolower($funcName)]);
+    }
 }

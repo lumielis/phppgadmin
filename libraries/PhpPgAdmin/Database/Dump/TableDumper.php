@@ -19,8 +19,16 @@ class TableDumper extends ExportDumper
 {
     private $tableQuoted;
     private $schemaQuoted;
+    private $tableOid;
     private $deferredConstraints = [];
     private $deferredIndexes = [];
+    private $deferredDefaults = [];
+    private $deferredGeneratedColumns = [];
+
+    /**
+     * @var \PhpPgAdmin\Database\Dump\DependencyGraph\DependencyGraph|null
+     */
+    private $dependencyGraph = null;
 
     public function dump($subject, array $params, array $options = [])
     {
@@ -34,12 +42,20 @@ class TableDumper extends ExportDumper
         $this->tableQuoted = $this->connection->quoteIdentifier($table);
         $this->schemaQuoted = $this->connection->quoteIdentifier($schema);
 
+        // Get table OID for dependency analysis
+        $this->tableOid = $this->getTableOid($table, $schema);
+
+        // Accept dependency graph if passed in options
+        $this->dependencyGraph = $options['dependency_graph'] ?? null;
+
         $this->write("\n-- Table: \"{$schema}\".\"{$table}\"\n\n");
 
         if (empty($options['data_only'])) {
-            // Reset deferred constraints/indexes for this table
+            // Reset deferred constraints/indexes/defaults for this table
             $this->deferredConstraints = [];
             $this->deferredIndexes = [];
+            $this->deferredDefaults = [];
+            $this->deferredGeneratedColumns = [];
 
             // Use existing logic from TableActions/Postgres driver but adapted
             // Use writer-style method instead of getting SQL back
@@ -53,7 +69,9 @@ class TableDumper extends ExportDumper
         }
 
         if (empty($options['data_only'])) {
-            // Apply constraints and indexes AFTER data import for better performance
+            // Apply deferred items AFTER data import for better performance
+            $this->applyDeferredDefaults($options);
+            $this->applyDeferredGeneratedColumns($options);
             $this->applyDeferredConstraints($options);
             $this->writeIndexes($table, $options);
             $this->deferTriggers($table, $schema, $options);
@@ -61,7 +79,7 @@ class TableDumper extends ExportDumper
         }
 
         // Register this table as dumped (for sequence ownership validation)
-        if ($this->parentDumper && method_exists($this->parentDumper, 'registerDumpedTable')) {
+        if ($this->parentDumper instanceof SchemaDumper) {
             $this->parentDumper->registerDumpedTable($schema, $table);
         }
     }
@@ -148,9 +166,20 @@ class TableDumper extends ExportDumper
 
             // Check for generated column first (PostgreSQL 12+)
             if (isset($atts->fields['attgenerated']) && $atts->fields['attgenerated'] === 's') {
-                // Generated stored column - write GENERATED ALWAYS AS
+                // Generated stored column - check if we should defer it
                 if ($atts->fields['adsrc'] !== null) {
-                    $this->write(" GENERATED ALWAYS AS ({$atts->fields['adsrc']}) STORED");
+                    if ($this->shouldDeferExpression($atts->fields['adsrc'])) {
+                        // Defer generated column - will be added later
+                        $this->deferredGeneratedColumns[] = [
+                            'column' => $atts->fields['attname'],
+                            'type' => $atts->fields['type'],
+                            'expression' => $atts->fields['adsrc'],
+                        ];
+                        // Don't write the GENERATED clause now
+                    } else {
+                        // Safe to write inline
+                        $this->write(" GENERATED ALWAYS AS ({$atts->fields['adsrc']}) STORED");
+                    }
                 }
             } else {
                 // Regular column - handle NOT NULL and DEFAULT
@@ -159,8 +188,17 @@ class TableDumper extends ExportDumper
                 }
 
                 if ($atts->fields['adsrc'] !== null) {
-                    // Case 3: Other defaults (not sequence-related)
-                    $this->write(" DEFAULT {$atts->fields['adsrc']}");
+                    // Check if default should be deferred
+                    if ($this->shouldDeferExpression($atts->fields['adsrc'])) {
+                        // Defer default - will be applied later
+                        $this->deferredDefaults[] = [
+                            'column' => $atts->fields['attname'],
+                            'expression' => $atts->fields['adsrc'],
+                        ];
+                    } else {
+                        // Safe to write inline
+                        $this->write(" DEFAULT {$atts->fields['adsrc']}");
+                    }
                 }
             }
 
@@ -206,11 +244,26 @@ class TableDumper extends ExportDumper
                 }
             }
 
-            // Store constraint for later application
+            // Foreign keys are ALWAYS deferred to SchemaDumper level to avoid forward references
+            if ($cons->fields['contype'] === 'f') {
+                $this->deferForeignKeyToParent($name, $src);
+                $cons->moveNext();
+                continue;
+            }
+
+            // Store constraint for later application (this table only)
+            $shouldDefer = false;
+
+            // For check constraints, determine if we need to defer based on dependencies
+            if ($cons->fields['contype'] === 'c' && $this->containsFunctionCall($src)) {
+                $shouldDefer = $this->shouldDeferExpression($src);
+            }
+
             $this->deferredConstraints[] = [
                 'name' => $name,
                 'definition' => $src,
-                'type' => $cons->fields['contype']
+                'type' => $cons->fields['contype'],
+                'should_defer' => $shouldDefer,  // Mark if this needs NOT VALID
             ];
 
             $cons->moveNext();
@@ -317,10 +370,45 @@ class TableDumper extends ExportDumper
 
         $this->write("\n-- Constraints (applied after data import)\n\n");
 
+        $needsValidation = [];
+
         foreach ($this->deferredConstraints as $constraint) {
             $this->write("ALTER TABLE {$this->schemaQuoted}.{$this->tableQuoted} ");
             $this->write("ADD CONSTRAINT {$constraint['name']} {$constraint['definition']}");
+
+            // For check constraints that were deferred due to function dependencies, use NOT VALID
+            if ($constraint['type'] === 'c' && !empty($constraint['should_defer'])) {
+                $this->write(" NOT VALID");
+                $needsValidation[] = $constraint['name'];
+            }
+
             $this->write(";\n");
+        }
+
+        // Validate deferred check constraints
+        if (!empty($needsValidation)) {
+            $this->write("\n-- Validate deferred check constraints\n\n");
+            foreach ($needsValidation as $constraintName) {
+                $this->write("ALTER TABLE {$this->schemaQuoted}.{$this->tableQuoted} ");
+                $this->write("VALIDATE CONSTRAINT {$constraintName};\n");
+            }
+        }
+    }
+
+    /**
+     * Defer foreign key constraint to parent SchemaDumper for global application.
+     * This prevents forward references where Table A references Table B before B is created.
+     */
+    private function deferForeignKeyToParent($constraintName, $definition)
+    {
+        // Access parent dumper's deferred foreign keys collection
+        if ($this->parentDumper instanceof SchemaDumper) {
+            $this->parentDumper->addDeferredForeignKey([
+                'schemaQuoted' => $this->schemaQuoted,
+                'tableQuoted' => $this->tableQuoted,
+                'name' => $constraintName,
+                'definition' => $definition,
+            ]);
         }
     }
 
@@ -471,6 +559,183 @@ class TableDumper extends ExportDumper
             }
 
             $autovacs->moveNext();
+        }
+    }
+
+    /**
+     * Get table OID for dependency analysis.
+     *
+     * @param string $table Table name
+     * @param string $schema Schema name
+     * @return string|null Table OID or null if not found
+     */
+    private function getTableOid($table, $schema)
+    {
+        $tableEsc = $this->connection->escapeString($table);
+        $schemaEsc = $this->connection->escapeString($schema);
+
+        $sql = "SELECT c.oid
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relname = '$tableEsc'
+                AND n.nspname = '$schemaEsc'
+                AND c.relkind = 'r'";
+
+        $result = $this->connection->selectSet($sql);
+
+        if ($result && !$result->EOF) {
+            return $result->fields['oid'];
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if an expression contains a function call.
+     *
+     * @param string $expr Expression to check
+     * @return bool True if expression contains function call
+     */
+    private function containsFunctionCall($expr)
+    {
+        // Simple pattern to detect function calls
+        return preg_match('/\w+\s*\(/i', $expr) === 1;
+    }
+
+    /**
+     * Determine if an expression should be deferred based on dependency graph.
+     *
+     * @param string $expr Expression to check
+     * @return bool True if expression should be deferred
+     */
+    private function shouldDeferExpression($expr)
+    {
+        // If no dependency graph provided, defer by default for safety
+        if (!$this->dependencyGraph || !$this->tableOid) {
+            return $this->containsFunctionCall($expr);
+        }
+
+        // If expression doesn't contain functions, don't defer
+        if (!$this->containsFunctionCall($expr)) {
+            return false;
+        }
+
+        // Extract function OIDs from expression
+        $functionOids = $this->extractFunctionOids($expr);
+
+        // If any function comes after this table in dump order, defer
+        foreach ($functionOids as $funcOid) {
+            if ($this->dependencyGraph->shouldDefer($this->tableOid, $funcOid)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Extract function OIDs referenced in an expression.
+     *
+     * @param string $expr Expression to analyze
+     * @return array Array of function OIDs
+     */
+    private function extractFunctionOids($expr)
+    {
+        $oids = [];
+
+        // Pattern matches: function_name( or schema.function_name(
+        if (preg_match_all('/(?:(\w+)\.)?(\w+)\s*\(/i', $expr, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $schema = $match[1] ?: null;
+                $funcName = $match[2];
+
+                // Skip common built-ins
+                if (self::isBuiltinFunction($funcName)) {
+                    continue;
+                }
+
+                $funcOid = $this->resolveFunctionOid($funcName, $schema);
+                if ($funcOid) {
+                    $oids[] = $funcOid;
+                }
+            }
+        }
+
+        return $oids;
+    }
+
+    /**
+     * Resolve function name to OID.
+     *
+     * @param string $funcName Function name
+     * @param string|null $schema Optional schema name
+     * @return string|null Function OID or null if not found
+     */
+    private function resolveFunctionOid($funcName, $schema = null)
+    {
+        $funcName = $this->connection->escapeString($funcName);
+
+        if ($schema) {
+            $schema = $this->connection->escapeString($schema);
+            $sql = "SELECT p.oid
+                    FROM pg_catalog.pg_proc p
+                    JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+                    WHERE p.proname = '$funcName'
+                    AND n.nspname = '$schema'
+                    AND p.prokind = 'f'
+                    LIMIT 1";
+        } else {
+            // Look in current schema or search_path
+            $sql = "SELECT p.oid
+                    FROM pg_catalog.pg_proc p
+                    WHERE p.proname = '$funcName'
+                    AND p.prokind = 'f'
+                    LIMIT 1";
+        }
+
+        $result = $this->connection->selectSet($sql);
+
+        if ($result && !$result->EOF) {
+            return $result->fields['oid'];
+        }
+
+        return null;
+    }
+
+    /**
+     * Apply deferred DEFAULT expressions.
+     */
+    private function applyDeferredDefaults($options)
+    {
+        if (empty($this->deferredDefaults)) {
+            return;
+        }
+
+        $this->write("\n-- Deferred Defaults\n\n");
+
+        foreach ($this->deferredDefaults as $default) {
+            $columnQuoted = $this->connection->quoteIdentifier($default['column']);
+            $this->write("ALTER TABLE {$this->schemaQuoted}.{$this->tableQuoted} ");
+            $this->write("ALTER COLUMN {$columnQuoted} SET DEFAULT {$default['expression']};\n");
+        }
+    }
+
+    /**
+     * Apply deferred generated columns.
+     */
+    private function applyDeferredGeneratedColumns($options)
+    {
+        if (empty($this->deferredGeneratedColumns)) {
+            return;
+        }
+
+        $this->write("\n-- Deferred Generated Columns\n\n");
+
+        foreach ($this->deferredGeneratedColumns as $genCol) {
+            $columnQuoted = $this->connection->quoteIdentifier($genCol['column']);
+            $this->write("ALTER TABLE {$this->schemaQuoted}.{$this->tableQuoted} ");
+            $this->write("ADD COLUMN {$columnQuoted} {$genCol['type']} ");
+            $this->write("GENERATED ALWAYS AS ({$genCol['expression']}) STORED;\n");
         }
     }
 
