@@ -24,7 +24,7 @@ function doCreate($msg = '')
     $partitionActions = new PartitionActions($pg);
 
     $misc->printTrail('table');
-    $misc->printTitle($lang['strcreatepartition'], 'CreatePartition');
+    $misc->printTitle($lang['strcreatepartition'], 'pg.partition.create');
     $misc->printMsg($msg);
 
     // Get partition info
@@ -358,7 +358,7 @@ function doTestPruning($msg = '')
     if (!isset($_POST['execute']) || empty($_POST['query'])) {
         return;
     }
-    
+
     $query = $_POST['query'];
 
     // Run EXPLAIN to see partition pruning
@@ -433,7 +433,7 @@ function doBulkCreate($msg = '')
     $partitionActions = new PartitionActions($pg);
 
     $misc->printTrail('table');
-    $misc->printTitle($lang['strpartitiontemplate'], 'CreatePartition');
+    $misc->printTitle($lang['strpartitiontemplate'], 'pg.partition.create');
     $misc->printMsg($msg);
 
     // Get partition info
@@ -497,6 +497,7 @@ function doBulkCreate($msg = '')
 
         <input type="hidden" name="action" value="save_bulk_create" />
         <?= $misc->form; ?>
+        <input type="hidden" name="table" value="<?= htmlspecialchars($_REQUEST['table']); ?>" />
         <p>
             <input type="submit" name="save" value="<?= $lang['strcreateall']; ?>" />
             <input type="submit" name="cancel" value="<?= $lang['strcancel']; ?>" />

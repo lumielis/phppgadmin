@@ -154,5 +154,6 @@ return [
 
     'pg.partition' => 'ddl-partitioning.html',
     'pg.partition.detach' => 'sql-altertable.html#SQL-ALTERTABLE-DETACH-PARTITION',
+    'pg.partition.create' => 'sql-createtable.html#SQL-CREATETABLE-PARTITION',
 ];
 
