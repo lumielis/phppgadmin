@@ -8,7 +8,7 @@ import {
 	UnzipInflate,
 } from "../lib/fflate/esm/browser.js";
 import { getBzip2Module } from "../lib/bzip2/bzip2-stream.js";
-import { logImport } from "./utils.js";
+import { logImport, detectZipSignature } from "./utils.js";
 
 /**
  * Detect compression format from magic bytes
@@ -19,12 +19,7 @@ export function detectFormat(header) {
 	if (header.length < 2) return null;
 
 	// ZIP: 50 4B 03 04 (PK..)
-	if (
-		header[0] === 0x50 &&
-		header[1] === 0x4b &&
-		header[2] === 0x03 &&
-		header[3] === 0x04
-	) {
+	if (detectZipSignature(header)) {
 		return "zip";
 	}
 
@@ -97,7 +92,7 @@ class ZipDecoder extends BaseDecoder {
 				}
 				if (data && data.length > 0) {
 					console.log(
-						`ZIP file chunk: ${data.length} bytes, final=${final}`
+						`ZIP file chunk: ${data.length} bytes, final=${final}`,
 					);
 					// Emit data immediately, but always with final=false for chunks
 					this._emit(data, false);
@@ -165,7 +160,7 @@ class RawDecoder extends BaseDecoder {
 }
 
 // Streaming Bzip2 decoder using BZ2_bzDecompress
-class Bzip2StreamingDecoder extends BaseDecoder {
+class Bzip2Decoder extends BaseDecoder {
 	constructor() {
 		super();
 		this.modulePromise = getBzip2Module();
@@ -243,7 +238,7 @@ class Bzip2StreamingDecoder extends BaseDecoder {
 				if (produced > 0) {
 					const outChunk = m.HEAPU8.slice(
 						this.outPtr,
-						this.outPtr + produced
+						this.outPtr + produced,
 					);
 					this._emit(outChunk, false);
 				}
@@ -308,7 +303,7 @@ function createDecoderForFormat(format) {
 		case "gzip":
 			return new GzipDecoder();
 		case "bzip2":
-			return new Bzip2StreamingDecoder();
+			return new Bzip2Decoder();
 		case "raw":
 		default:
 			return new RawDecoder();
@@ -326,7 +321,7 @@ export function createUniversalDecompressStream(format) {
 	// Wire up callbacks
 	decoder.ondata = (data, isFinal) => {
 		console.log(
-			`Decompressed chunk: ${data.length} bytes, final=${isFinal}`
+			`Decompressed chunk: ${data.length} bytes, final=${isFinal}`,
 		);
 		if (stream.ondata) stream.ondata(data, isFinal);
 		if (isFinal) finished = true;

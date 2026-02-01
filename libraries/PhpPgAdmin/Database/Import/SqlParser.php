@@ -419,7 +419,7 @@ class SqlParser
                         $pos = $m[0][1];
                         $matchLen = strlen($m[0][0]);
                         $stmt = substr($buf, $start, $pos + $matchLen - $start);
-                        $statements[] = $stmt;
+                        $items[] = ['type' => 'statement', 'content' => $stmt];
                         $start = self::skipNoise($buf, $pos + $matchLen, $len);
                         $i = $start - 1;
                         continue;

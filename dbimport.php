@@ -48,7 +48,7 @@ function handle_process_chunk_stream(): void
 
         // Identify this import stream so multiple uploads can run in parallel
         // without stomping each other's session state.
-        $importSessionId = isset($_REQUEST['import_session_id']) ?? null;
+        $importSessionId = $_REQUEST['import_session_id'] ?? null;
         if (empty($importSessionId)) {
             http_response_code(400);
             echo json_encode(['error' => 'import_session_id parameter required']);
@@ -66,7 +66,11 @@ function handle_process_chunk_stream(): void
             $_SESSION['stream_import'] = [];
         }
 
-        if (!isset($_SESSION['stream_import'][$importSessionId]) || $baseOffset === 0) {
+        $resetSession =
+            !isset($_SESSION['stream_import'][$importSessionId]) ||
+            $baseOffset === 0;
+
+        if ($resetSession) {
             $_SESSION['stream_import'][$importSessionId] = [
                 'copy_active' => false,
                 'copy_header' => '',
@@ -96,7 +100,8 @@ function handle_process_chunk_stream(): void
 
         $logCollector = new LogCollector(true);
 
-        // Optional first-request options (can be sent every time; we ignore if unused)
+        // Optional first-request options (can be sent every time; we ignore
+        // if unused)
         $options = [
             'stop_on_error' => !empty($_REQUEST['opt_stop_on_error']),
             'roles' => !empty($_REQUEST['opt_roles']),
@@ -180,7 +185,6 @@ function handle_process_chunk_stream(): void
         $copyHeader = $streamState['copy_header'] ?? '';
         $truncatedTables = &$streamState['truncated_tables']; // Reference for persistence
 
-        $statements = [];
         $remainder = '';
         $errors = 0;
 
@@ -297,7 +301,7 @@ function handle_process_chunk_stream(): void
             AppContainer::set('quiet_sql_error_handling', false);
         };
 
-        $executeDeferred = function () use (&$pg, &$streamState, $options, &$errors, $logCollector) {
+        $executeDeferred = function () use ($pg, &$streamState, $options, &$errors, $logCollector) {
             if (empty($streamState['deferred'])) {
                 return;
             }
@@ -341,7 +345,7 @@ function handle_process_chunk_stream(): void
         };
 
         // Execute queued ownership and rights statements (called on EOF)
-        $executeQueuedStatements = function () use (&$pg, &$streamState, $options, &$errors, $logCollector) {
+        $executeQueuedStatements = function () use ($pg, &$streamState, $options, &$errors, $logCollector) {
             $ownershipQueue = $streamState['ownership_queue'] ?? [];
             $rightsQueue = $streamState['rights_queue'] ?? [];
 
@@ -399,19 +403,30 @@ function handle_process_chunk_stream(): void
             AppContainer::set('quiet_sql_error_handling', false);
         };
 
-        $copyHandlerFactory = function () use ($logCollector, &$pg, &$streamState, $options) {
+        $copyHandlerFactory = function () use ($logCollector, $pg, &$streamState, $options) {
             $scope = $_REQUEST['scope'] ?? 'database';
             $scopeIdent = $_REQUEST['scope_ident'] ?? '';
             $schemaParam = $_REQUEST['schema'] ?? '';
-            return new CopyStreamHandler($logCollector, $pg, $streamState, $options, $scope, $scopeIdent, is_string($schemaParam) ? $schemaParam : '');
+            return new CopyStreamHandler(
+                $logCollector,
+                $pg,
+                $streamState,
+                $options,
+                $scope,
+                $scopeIdent,
+                is_string($schemaParam) ? $schemaParam : ''
+            );
         };
 
         $items = [];
         $shouldStop = false;
         // COPY streaming mode
         $copyTermPattern = "/\r?\n\\\.\r?\n/";
+        $copyHeaderPattern = '/^\s*(COPY\b[^\n]*FROM\s+stdin\b[^\n]*;\s*\r?\n)/i';
+
         if ($inCopy) {
-            // If terminator present in this chunk, finish COPY and parse rest normally
+            // If terminator present in this chunk, finish COPY and parse rest 
+            // normally
             if (preg_match($copyTermPattern, $decoded, $m, PREG_OFFSET_CAPTURE)) {
                 $pos = $m[0][1];
                 $before = substr($decoded, 0, $pos); // data lines up to newline before terminator
@@ -461,8 +476,9 @@ function handle_process_chunk_stream(): void
                 }
             }
         } else {
-            // Check if this chunk starts a COPY ... FROM stdin block without terminator present
-            if (preg_match('/^\s*(COPY\b.*?FROM\s+stdin;\s*\r?\n)/si', $decoded, $hm, PREG_OFFSET_CAPTURE)) {
+            // Check if this chunk starts a COPY ... FROM stdin block without 
+            // terminator present
+            if (preg_match($copyHeaderPattern, $decoded, $hm, PREG_OFFSET_CAPTURE)) {
                 $header = $hm[1][0];
                 $headerEnd = $hm[1][1] + strlen($hm[1][0]);
                 $rest = substr($decoded, $headerEnd);
@@ -496,23 +512,27 @@ function handle_process_chunk_stream(): void
                     }
                 }
             } else {
-                // Normal path: Parse statements using SqlParser with COPY and comment/meta handling
+                // Normal path: Parse statements using SqlParser with COPY and 
+                // comment/meta handling
                 $split = SqlParser::parseFromString($decoded, '', false, !empty($streamState['standard_conforming_strings']));
                 $items = $split['items'];
                 $remainder = $split['remainder'];
                 $streamState['standard_conforming_strings'] = !empty($split['standard_conforming_strings']);
-                // Note: If remainder starts with COPY, streaming will be activated AFTER
-                // statements in $items are executed (see code after the foreach loop)
+                // Note: If remainder starts with COPY, streaming will be 
+                // activated AFTER statements in $items are executed
+                // (see code after the foreach loop)
             }
         }
 
-        // Helper function to switch database with deferred statement execution and settings re-application
+        // Helper function to switch database with deferred statement execution 
+        // and settings re-application
         $switchDatabase = function (string $dbName) use (&$pg, &$streamState, $executeDeferred, $settingsApplier, $misc, &$errors, $logCollector) {
             if ($streamState['active_database'] === $dbName) {
                 return true; // Already on this database
             }
 
-            // Execute deferred self-affecting statements before leaving current database
+            // Execute deferred self-affecting statements before leaving current 
+            // database
             $executeDeferred();
 
             try {
@@ -537,7 +557,8 @@ function handle_process_chunk_stream(): void
             }
         };
 
-        // Compute offset advance based on source bytes read, not executed statements.
+        // Compute offset advance based on source bytes read, not executed 
+        // statements.
         // New bytes read = payload length minus client-prepended remainder.
         $payloadLen = strlen($decoded);
         $newBytesRead = $payloadLen - $remainderLen;
@@ -562,18 +583,13 @@ function handle_process_chunk_stream(): void
             }
         }
 
-        // Process items sequentially: meta-commands affect subsequent statements
         $itemsProcessed = 0;
-        if (!empty($items)) {
-            if ($skipCount > 0) {
-                // Skip items as requested (used for retry after error)
-                $items = array_slice($items, $skipCount);
-            }
+        $processItems = function (array $itemsToProcess) use (&$pg, &$streamState, $options, $parseConnectMeta, $parseEncodingMeta, $settingsApplier, $runStatements, $switchDatabase, $copyHandlerFactory, $copyHeaderPattern, $copyTermPattern, &$errors, &$itemsProcessed, &$shouldStop, $logCollector) {
+            foreach ($itemsToProcess as $item) {
+                if (!isset($item['type'], $item['content'])) {
+                    continue;
+                }
 
-            // Track errors before processing to detect new errors in this chunk
-            $errorsBefore = $errors;
-
-            foreach ($items as $item) {
                 if ($item['type'] === 'meta') {
                     // Process meta-command immediately
                     $metaLine = $item['content'];
@@ -587,7 +603,6 @@ function handle_process_chunk_stream(): void
                             $logCollector->addInfo('Meta-command: \\connect ' . $connDb);
                         }
                     } else {
-                        // Check if this is a \connect command (for logging purposes)
                         $connDb = $parseConnectMeta($metaLine);
                         if ($connDb !== null) {
                             $logCollector->addInfo('Meta-command: \\connect ' . $connDb . ' (ignored)');
@@ -605,44 +620,80 @@ function handle_process_chunk_stream(): void
                     }
 
                     $itemsProcessed++;
-                } elseif ($item['type'] === 'statement') {
-                    // Check if there's a pending database switch from meta-command
-                    if (
-                        !empty($streamState['pending_database']) &&
-                        $streamState['active_database'] !== $streamState['pending_database']
-                    ) {
-                        if (!$switchDatabase($streamState['pending_database'])) {
-                            // Failed to switch database: stop processing further statements
+                    continue;
+                }
+
+                if ($item['type'] !== 'statement') {
+                    continue;
+                }
+
+                // COPY blocks must be executed using the COPY protocol 
+                // (pg_put_line/pg_end_copy).
+                // If we see a complete COPY ... FROM stdin block, handle it
+                // here instead of pg->execute().
+                if (preg_match($copyHeaderPattern, $item['content'], $hm, PREG_OFFSET_CAPTURE) && preg_match($copyTermPattern, $item['content'], $tm, PREG_OFFSET_CAPTURE)) {
+                    $header = $hm[1][0];
+                    $headerEnd = $hm[1][1] + strlen($hm[1][0]);
+                    $termPos = $tm[0][1];
+                    $dataSend = substr($item['content'], $headerEnd, $termPos - $headerEnd);
+                    if ($dataSend !== '' && substr($dataSend, -1) !== "\n") {
+                        $dataSend .= "\n";
+                    }
+                    try {
+                        $copyHandlerFactory()->stream($header, $dataSend);
+                    } catch (CopyException $e) {
+                        $errors++;
+                        $logCollector->addError($e->getMessage());
+                        if ($options['stop_on_error']) {
                             $shouldStop = true;
-                            $logCollector->addFatal('Import stopped: failed to switch database to "' . $streamState['pending_database'] . '"');
+                            $logCollector->addError('Import will stop due to COPY error (stop_on_error enabled)');
                             break;
                         }
-                        $streamState['pending_database'] = ''; // Clear after switch
                     }
 
-                    // Collect settings from this statement before executing
-                    // Returns false if statement should be skipped (unknown/unsupported SET command)
-                    $shouldExecute = $settingsApplier->collectFromStatement($item['content'], $streamState);
+                    $itemsProcessed++;
+                    continue;
+                }
 
-                    // Execute the statement only if it wasn't skipped
-                    if ($shouldExecute) {
-                        try {
-                            $runStatements([$item['content']]);
-                            $itemsProcessed++;
-                        } catch (\Throwable $e) {
-                            // Error already counted in executeStatementsBatch
-                            $logCollector->addError('Statement execution failed: ' . $e->getMessage());
-                            // Exception thrown means stop_on_error was triggered
-                            if ($options['stop_on_error']) {
-                                break; // Stop processing remaining items in this chunk
-                            }
-                        }
-                    } else {
-                        // Statement was skipped (logged by collectFromStatement)
+                // Check if there's a pending database switch from meta-command
+                if (!empty($streamState['pending_database']) && $streamState['active_database'] !== $streamState['pending_database']) {
+                    if (!$switchDatabase($streamState['pending_database'])) {
+                        $shouldStop = true;
+                        $logCollector->addFatal('Import stopped: failed to switch database to "' . $streamState['pending_database'] . '"');
+                        break;
+                    }
+                    $streamState['pending_database'] = ''; // Clear after switch
+                }
+
+                // Collect settings from this statement before executing
+                // Returns false if statement should be skipped
+                // (unknown/unsupported SET command)
+                $shouldExecute = $settingsApplier->collectFromStatement($item['content'], $streamState);
+
+                if ($shouldExecute) {
+                    try {
+                        $runStatements([$item['content']]);
                         $itemsProcessed++;
+                    } catch (\Throwable $e) {
+                        $logCollector->addError('Statement execution failed: ' . $e->getMessage());
+                        if ($options['stop_on_error']) {
+                            break;
+                        }
                     }
+                } else {
+                    $itemsProcessed++;
                 }
             }
+        };
+
+        // Process items sequentially: meta-commands affect subsequent statements
+        if (!empty($items)) {
+            if ($skipCount > 0) {
+                $items = array_slice($items, $skipCount);
+            }
+
+            $errorsBefore = $errors;
+            $processItems($items);
 
             // Check if errors occurred and stop_on_error is enabled
             if ($options['stop_on_error'] && $errors > $errorsBefore) {
@@ -651,15 +702,45 @@ function handle_process_chunk_stream(): void
                 $logCollector->addError('Import stopped: ' . $errorCount . ' SQL error(s) occurred in this chunk (stop_on_error enabled)');
             }
 
-            // After all statements are executed, check if remainder starts with COPY
-            // Now it's safe to activate streaming since CREATE TABLE etc. have run
-            if (!$shouldStop && $remainder !== '' && !$inCopy && preg_match('/^\s*(COPY\b.*?FROM\s+stdin;\s*\r?\n)/si', $remainder, $copyMatch, PREG_OFFSET_CAPTURE)) {
+            // After all statements are executed, check if remainder starts
+            // with COPY
+            // Now it's safe to activate streaming since CREATE TABLE etc.
+            // have run
+            if (!$shouldStop && $remainder !== '' && !$inCopy && preg_match($copyHeaderPattern, $remainder, $copyMatch, PREG_OFFSET_CAPTURE)) {
                 $header = $copyMatch[1][0];
                 $headerEnd = $copyMatch[1][1] + strlen($copyMatch[1][0]);
                 $rest = substr($remainder, $headerEnd);
 
                 // Check if terminator is present in remainder
-                if (!preg_match($copyTermPattern, $rest)) {
+                if (preg_match($copyTermPattern, $rest, $m, PREG_OFFSET_CAPTURE)) {
+                    // Complete COPY block is present in remainder: execute it
+                    // now and parse what's after it.
+                    $dataSend = substr($rest, 0, $m[0][1]);
+                    if ($dataSend !== '' && substr($dataSend, -1) !== "\n") {
+                        $dataSend .= "\n";
+                    }
+                    try {
+                        $copyHandlerFactory()->stream($header, $dataSend);
+                    } catch (CopyException $e) {
+                        $errors++;
+                        $logCollector->addError($e->getMessage());
+                        if ($options['stop_on_error']) {
+                            $shouldStop = true;
+                            $logCollector->addError('Import will stop due to COPY error (stop_on_error enabled)');
+                        }
+                    }
+
+                    // Continue parsing/executing any SQL after the terminator.
+                    if (!$shouldStop) {
+                        $after = substr($rest, $m[0][1] + strlen($m[0][0]));
+                        $split = SqlParser::parseFromString($after, '', false, !empty($streamState['standard_conforming_strings']));
+                        $streamState['standard_conforming_strings'] = !empty($split['standard_conforming_strings']);
+                        if (!empty($split['items'])) {
+                            $processItems($split['items']);
+                        }
+                        $remainder = $split['remainder'];
+                    }
+                } else {
                     // Activate COPY streaming and send complete lines
                     $streamState['copy_active'] = true;
                     $streamState['copy_header'] = $header;
@@ -682,7 +763,6 @@ function handle_process_chunk_stream(): void
                         $remainder = $tail;
                     }
                 }
-                // else: Full COPY with terminator - leave as-is, next chunk will handle it via SqlParser
             }
 
             $logCollector->addInfo('Chunk processed: offset=' . $absoluteOffset . ' items=' . $itemsProcessed . ' remainder=' . strlen($remainder));
@@ -692,9 +772,8 @@ function handle_process_chunk_stream(): void
             }
         }
 
-        // If client indicates EOF: either drop ignorable tail or surface a clear error.
-        // NOTE: We do not attempt to "reconstruct" SQL here. The client will receive the exact
-        // remainder string and can retry by prepending it (also required for future compressed streaming).
+        // If client indicates EOF: either drop ignorable tail or surface a
+        // clear error.
         if ($eof && !empty($remainder) && !$inCopy) {
             if ($isIgnorableTail($remainder)) {
                 $remainder = '';
@@ -711,9 +790,10 @@ function handle_process_chunk_stream(): void
         }
 
         // Return the *actual* remainder string.
-        // The remainder is not guaranteed to be a literal suffix of the uploaded payload
-        // (SqlParser may normalize/trim while streaming INSERT ... VALUES), so returning only
-        // remainder_len and reconstructing client-side is not reliable.
+        // The remainder is not guaranteed to be a literal suffix of the
+        // uploaded payload (SqlParser may normalize/trim while streaming 
+        // INSERT ... VALUES), so returning only remainder_len and
+        // reconstructing client-side is not reliable.
         echo json_encode([
             'offset' => $absoluteOffset,
             'remainder_len' => strlen($remainder),
