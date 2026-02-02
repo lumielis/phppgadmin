@@ -11,6 +11,8 @@
 $lang['applang'] = 'English';
 $lang['applocale'] = 'en-US';
 $lang['applangdir'] = 'ltr';
+$lang['appdecimalsep'] = '.';
+$lang['appthousandssep'] = ',';
 
 // Welcome
 $lang['strintro'] = 'Welcome to phpPgAdmin.';
@@ -1074,7 +1076,6 @@ $lang['strpartitionof'] = 'Partition of';
 $lang['strpartitionedby'] = 'Partitioned by';
 $lang['strviewallpartitions'] = 'View all partitions';
 $lang['strmanagepartitions'] = 'Manage Partitions';
-$lang['stron'] = 'on';
 $lang['strpartitionbounds'] = 'Partition Bounds';
 $lang['strcreatepartitionedtable'] = 'Create as partitioned table';
 $lang['strnopartitions'] = 'No partitions found';

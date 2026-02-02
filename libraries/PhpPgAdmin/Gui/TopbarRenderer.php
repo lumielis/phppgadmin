@@ -142,7 +142,7 @@ class TopbarRenderer extends AppContext
             echo "
             </script>";
         } else {
-            echo "<span class=\"appname\">{$appName}</span> <span class=\"version\">{$appVersion}</span>";
+            echo "<span class=\"appname\">{$appName}</span> <span class=\"version\">{$appVersion}</span></td>";
         }
 
         echo "</tr></table></div>\n";
