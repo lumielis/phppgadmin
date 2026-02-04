@@ -405,9 +405,7 @@
 			if (scrollTop !== null) {
 				const contentDiv = document.getElementById("content");
 				if (contentDiv) {
-					setTimeout(() => {
-						contentDiv.scrollTop = parseInt(scrollTop, 10);
-					});
+					contentDiv.scrollTop = parseInt(scrollTop, 10);
 				}
 				sessionStorage.removeItem("contentScrollTop");
 			}
