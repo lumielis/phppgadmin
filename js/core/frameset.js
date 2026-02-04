@@ -606,7 +606,7 @@ function frameSetHandler(postCacheDB) {
 				history.pushState(state, "", finalUrl);
 
 				// Scroll back to the top
-				contentContainer.scrollTo(0, 0);
+				content.scrollTo(0, 0);
 			}
 
 			const loadedEvent = new CustomEvent("frameLoaded", {
@@ -742,7 +742,7 @@ function frameSetHandler(postCacheDB) {
 				formStates: e.state?.formStates,
 			});
 			// Scroll back to the top
-			contentContainer.scrollTo(0, 0);
+			content.scrollTo(0, 0);
 			// Dispatch frame loaded event
 			const event = new CustomEvent("frameLoaded", {
 				detail: { url: url },

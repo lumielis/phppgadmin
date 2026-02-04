@@ -867,7 +867,7 @@
 	let explainBuffersCheckbox = null;
 	let explainVerboseCheckbox = null;
 	let explainFormatSelect = null;
-	let explainQueryElement = null;
+	let explainQueryCheckbox = null;
 	let queryEditorElement = null;
 	let expandStringsElement = null;
 
@@ -886,7 +886,11 @@
 		if (!ifExists && found) {
 			// Toggle EXPLAIN on/off
 			newQuery = query;
-			explainQueryElement.classList.remove("success");
+			explainQueryCheckbox.checked = false;
+			if (explainAnalyzeCheckbox) explainAnalyzeCheckbox.checked = false;
+			if (explainVerboseCheckbox) explainVerboseCheckbox.checked = false;
+			if (explainBuffersCheckbox) explainBuffersCheckbox.checked = false;
+			if (explainFormatSelect) explainFormatSelect.value = "";
 		} else {
 			// Get options
 			let options = [];
@@ -910,7 +914,7 @@
 
 			// Prepend prefix
 			newQuery = prefix + "\n" + query;
-			explainQueryElement.classList.add("success");
+			explainQueryCheckbox.checked = true;
 			if (expandStringsElement) {
 				expandStringsElement.checked = true;
 			}
@@ -953,28 +957,28 @@
 					}
 				}
 			}
-			explainQueryElement.classList.add("success");
+			explainQueryCheckbox.checked = true;
 		}
 	}
 
 	document.addEventListener(
 		"frameLoaded",
 		() => {
+			explainQueryCheckbox = document.getElementById("explain-query");
 			explainAnalyzeCheckbox = document.getElementById("explain-analyze");
 			explainBuffersCheckbox = document.getElementById("explain-buffers");
 			explainVerboseCheckbox = document.getElementById("explain-verbose");
 			explainFormatSelect = document.getElementById("explain-format");
-			explainQueryElement = document.getElementById("explain-query");
 			queryEditorElement = document.getElementById("query-editor");
 			expandStringsElement = document.getElementById("expand-strings");
 
-			if (!queryEditorElement || !explainQueryElement) {
+			if (!queryEditorElement || !explainQueryCheckbox) {
 				return;
 			}
 
 			parseExplainOptions();
 
-			explainQueryElement.onclick = () => addExplainPrefix(false);
+			explainQueryCheckbox.onchange = () => addExplainPrefix(false);
 
 			if (explainBuffersCheckbox) {
 				explainBuffersCheckbox.onchange = () => addExplainPrefix(true);

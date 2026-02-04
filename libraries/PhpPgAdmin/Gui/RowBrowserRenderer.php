@@ -1551,7 +1551,10 @@ class RowBrowserRenderer extends AppContext
             <div class="flex-row align-items-center">
                 <input type="submit" value="<?= $lang['strquerysubmit'] ?>" />
                 <div class="query-explain-frame flex-row align-items-center ml-2">
-                    <input type="button" id="explain-query" value="<?= $lang['strexplain'] ?>" class="" />
+                    <label class="">
+                        <input type="checkbox" id="explain-query" />
+                        <?= $lang['strexplain'] ?>:
+                    </label>
                     <label class="ml-1">
                         <input type="checkbox" id="explain-analyze" />
                         <?= $lang['stranalyze'] ?>
