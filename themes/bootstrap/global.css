@@ -90,6 +90,7 @@ input[type="button"]:disabled,
 input[type="submit"]:disabled,
 input[type="reset"]:disabled {
 	pointer-events: none;
+	opacity: 0.55;
 }
 
 button:hover,

@@ -39,6 +39,8 @@ function doCreate($msg = '')
 		$_POST['members'] = [];
 	if (!isset($_POST['adminmembers']))
 		$_POST['adminmembers'] = [];
+	if (!isset($_POST['formComment']))
+		$_POST['formComment'] = '';
 
 	$misc->printTrail('role');
 	$misc->printTitle($lang['strcreaterole'], 'pg.role.create');
@@ -94,6 +96,12 @@ function doCreate($msg = '')
 				<th class="data left"><?= $lang['strexpires'] ?></th>
 				<td class="data1"><input size="23" name="formExpires" value="<?= html_esc($_POST['formExpires']) ?>"
 						data-type="timestamp" /></td>
+			</tr>
+			<tr>
+				<th class="data left"><?= $lang['strcomment'] ?>
+				</th>
+				<td class="data1"><textarea size="15" name="formComment"><?= html_esc($_POST['formComment']) ?></textarea>
+				</td>
 			</tr>
 
 			<?php
@@ -155,6 +163,7 @@ function doSaveCreate()
 {
 	$pg = AppContainer::getPostgres();
 	$lang = AppContainer::getLang();
+	$conf = AppContainer::getConf();
 	$roleActions = new RoleActions($pg);
 
 	if (!isset($_POST['memberof']))
@@ -165,13 +174,16 @@ function doSaveCreate()
 		$_POST['adminmembers'] = [];
 
 	// Check data
-	if ($_POST['formRolename'] == '')
+	$rolename = trim($_POST['formRolename'] ?? '');
+	if ($rolename == '')
 		doCreate($lang['strroleneedsname']);
+	else if (!$conf['show_system'] && str_starts_with($rolename, 'pg_'))
+		doCreate($lang['strroleinvalidname']);
 	else if ($_POST['formPassword'] != $_POST['formConfirm'])
 		doCreate($lang['strpasswordconfirm']);
 	else {
 		$status = $roleActions->createRole(
-			$_POST['formRolename'],
+			$rolename,
 			$_POST['formPassword'],
 			isset($_POST['formSuper']),
 			isset($_POST['formCreateDB']),
@@ -182,7 +194,8 @@ function doSaveCreate()
 			$_POST['formExpires'],
 			$_POST['memberof'],
 			$_POST['members'],
-			$_POST['adminmembers']
+			$_POST['adminmembers'],
+			$_POST['formComment']
 		);
 		if ($status == 0)
 			doDefault($lang['strrolecreated']);
@@ -216,15 +229,14 @@ function doAlter($msg = '')
 	}
 
 	$server_info = $misc->getServerInfo();
-	$canRename = $pg->hasUserRename() && ($_REQUEST['rolename'] != $server_info['username']);
 	$roledata->fields['rolsuper'] = $pg->phpBool($roledata->fields['rolsuper']);
 	$roledata->fields['rolcreatedb'] = $pg->phpBool($roledata->fields['rolcreatedb']);
 	$roledata->fields['rolcreaterole'] = $pg->phpBool($roledata->fields['rolcreaterole']);
 	$roledata->fields['rolinherit'] = $pg->phpBool($roledata->fields['rolinherit']);
 	$roledata->fields['rolcanlogin'] = $pg->phpBool($roledata->fields['rolcanlogin']);
 	if (!isset($_POST['formExpires'])) {
-		if ($canRename)
-			$_POST['formNewRoleName'] = $roledata->fields['rolname'];
+
+		$_POST['formNewRoleName'] = $roledata->fields['rolname'];
 		if ($roledata->fields['rolsuper'])
 			$_POST['formSuper'] = '';
 		if ($roledata->fields['rolcreatedb'])
@@ -237,6 +249,7 @@ function doAlter($msg = '')
 			$_POST['formCanLogin'] = '';
 		$_POST['formConnLimit'] = $roledata->fields['rolconnlimit'] == '-1' ? '' : $roledata->fields['rolconnlimit'];
 		$_POST['formExpires'] = $roledata->fields['rolvaliduntil'] == 'infinity' ? '' : $roledata->fields['rolvaliduntil'];
+		$_POST['formComment'] = $roledata->fields['rolcomment'];
 		$_POST['formPassword'] = '';
 	}
 
@@ -246,12 +259,8 @@ function doAlter($msg = '')
 			<tr>
 				<th class="data left" style="width: 130px"><?= $lang['strname'] ?></th>
 				<td class="data1">
-					<?php if ($canRename): ?>
-						<input name="formNewRoleName" size="15" maxlength="<?= $pg->_maxNameLen ?>"
-							value="<?= html_esc($_POST['formNewRoleName']) ?>" />
-					<?php else: ?>
-						<?= $misc->formatVal($roledata->fields['rolname']) ?>
-					<?php endif; ?>
+					<input name="formNewRoleName" size="15" maxlength="<?= $pg->_maxNameLen ?>"
+						value="<?= html_esc($_POST['formNewRoleName']) ?>" />
 				</td>
 			</tr>
 			<tr>
@@ -296,6 +305,13 @@ function doAlter($msg = '')
 				<th class="data left"><?= $lang['strexpires'] ?></th>
 				<td class="data1"><input size="23" name="formExpires" value="<?= html_esc($_POST['formExpires']) ?>"
 						data-type="timestamp" /></td>
+			</tr>
+			<tr>
+				<th class="data left">
+					<?= $lang['strcomment'] ?>
+				</th>
+				<td class="data1"><textarea size="15" name="formComment"><?= html_esc($_POST['formComment']) ?></textarea>
+				</td>
 			</tr>
 
 			<?php
@@ -400,6 +416,7 @@ function doSaveAlter()
 {
 	$pg = AppContainer::getPostgres();
 	$lang = AppContainer::getLang();
+	$conf = AppContainer::getConf();
 	$roleActions = new RoleActions($pg);
 
 	if (!isset($_POST['memberof']))
@@ -410,48 +427,33 @@ function doSaveAlter()
 		$_POST['adminmembers'] = [];
 
 	// Check name and password
-	if (isset($_POST['formNewRoleName']) && $_POST['formNewRoleName'] == '')
+	$rolename = trim($_POST['formNewRoleName'] ?? '');
+	if ($rolename == '')
 		doAlter($lang['strroleneedsname']);
+	else if (!$conf['show_system'] && str_starts_with($rolename, 'pg_'))
+		doAlter($lang['strroleinvalidname']);
 	else if ($_POST['formPassword'] != $_POST['formConfirm'])
 		doAlter($lang['strpasswordconfirm']);
 	else {
-		if (isset($_POST['formNewRoleName']))
-			$status = $roleActions->setRenameRole(
-				$_POST['rolename'],
-				$_POST['formNewRoleName'],
-				$_POST['formPassword'],
-				isset($_POST['formSuper']),
-				isset($_POST['formCreateDB']),
-				isset($_POST['formCreateRole']),
-				isset($_POST['formInherits']),
-				isset($_POST['formCanLogin']),
-				$_POST['formConnLimit'],
-				$_POST['formExpires'],
-				$_POST['memberof'],
-				$_POST['members'],
-				$_POST['adminmembers'],
-				$_POST['memberofold'],
-				$_POST['membersold'],
-				$_POST['adminmembersold'],
-			);
-		else
-			$status = $roleActions->setRole(
-				$_POST['rolename'],
-				$_POST['formPassword'],
-				isset($_POST['formSuper']),
-				isset($_POST['formCreateDB']),
-				isset($_POST['formCreateRole']),
-				isset($_POST['formInherits']),
-				isset($_POST['formCanLogin']),
-				$_POST['formConnLimit'],
-				$_POST['formExpires'],
-				$_POST['memberof'],
-				$_POST['members'],
-				$_POST['adminmembers'],
-				$_POST['memberofold'],
-				$_POST['membersold'],
-				$_POST['adminmembersold']
-			);
+		$status = $roleActions->setRenameRole(
+			$_POST['rolename'],
+			$rolename,
+			$_POST['formPassword'],
+			isset($_POST['formSuper']),
+			isset($_POST['formCreateDB']),
+			isset($_POST['formCreateRole']),
+			isset($_POST['formInherits']),
+			isset($_POST['formCanLogin']),
+			$_POST['formConnLimit'],
+			$_POST['formExpires'],
+			$_POST['memberof'],
+			$_POST['members'],
+			$_POST['adminmembers'],
+			$_POST['memberofold'],
+			$_POST['membersold'],
+			$_POST['adminmembersold'],
+			$_POST['formComment']
+		);
 		if ($status == 0)
 			doDefault($lang['strrolealtered']);
 		else
@@ -808,17 +810,18 @@ function doDefault($msg = '')
 	$lang = AppContainer::getLang();
 	$roleActions = new RoleActions($pg);
 
-	function renderRoleConnLimit($val)
-	{
+	$renderRoleConnLimit = function ($val) {
 		$lang = AppContainer::getLang();
 		return $val == '-1' ? $lang['strnolimit'] : html_esc($val);
-	}
+	};
 
-	function renderRoleExpires($val)
-	{
+	$renderRoleExpires = function ($val) {
 		$lang = AppContainer::getLang();
-		return $val == 'infinity' ? $lang['strnever'] : html_esc($val);
-	}
+		var_dump($val);
+		if ($val == '' || $val == 'infinity')
+			return $lang['strnever'];
+		return html_esc($val);
+	};
 
 	$misc->printTrail('server');
 	$misc->printTabs('server', 'roles');
@@ -863,16 +866,32 @@ function doDefault($msg = '')
 			'title' => $lang['strconnlimit'],
 			'field' => field('rolconnlimit'),
 			'type' => 'callback',
-			'params' => ['function' => 'renderRoleConnLimit']
+			'params' => ['function' => $renderRoleConnLimit]
 		],
 		'expires' => [
 			'title' => $lang['strexpires'],
 			'field' => field('rolvaliduntil'),
 			'type' => 'callback',
-			'params' => ['function' => 'renderRoleExpires', 'null' => $lang['strnever']],
+			'params' => ['function' => $renderRoleExpires, 'null' => $lang['strnever']],
 		],
 		'actions' => [
 			'title' => $lang['stractions'],
+		],
+		'comment' => [
+			'title' => $lang['strcomment'],
+			'field' => field('rolcomment'),
+		],
+	];
+
+	$footer = [
+		'role' => [
+			'agg' => 'count',
+			'format' => fn($v) => "$v {$lang['strroles']}",
+			'colspan' => 2,
+		],
+		'createdb' => [
+			'text' => $lang['strtotal'],
+			'colspan' => 2,
 		],
 	];
 
@@ -905,7 +924,15 @@ function doDefault($msg = '')
 		],
 	];
 
-	$misc->printTable($roles, $columns, $actions, 'roles-roles', $lang['strnoroles']);
+	$misc->printTable(
+		$roles,
+		$columns,
+		$actions,
+		'roles-roles',
+		$lang['strnoroles'],
+		null,
+		$footer
+	);
 
 	$navlinks = [
 		'create' => [

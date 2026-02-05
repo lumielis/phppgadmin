@@ -420,6 +420,7 @@ $lang['strroledroppedbad'] = 'Role drop failed.';
 $lang['strnolimit'] = 'No limit';
 $lang['strnever'] = 'Never';
 $lang['strroleneedsname'] = 'You must give a name for the role.';
+$lang['strroleinvalidname'] = 'Invalid role name. Roles starting with "pg_" are reserved by PostgreSQL.';
 
 // Privileges
 $lang['strprivilege'] = 'Privilege';

@@ -25,20 +25,24 @@ class RoleActions extends ActionsBase
 	{
 		$this->connection->clean($rolename);
 
-		if (!empty($rolename)) {
-			$sql = "
-				SELECT r.rolname, r.rolsuper, r.rolinherit, r.rolcreaterole, r.rolcreatedb, 
-					   r.rolcanlogin, r.rolconnlimit, r.rolvaliduntil, r.rolconfig
-				FROM pg_catalog.pg_roles r
-				WHERE r.rolname != '{$rolename}'
-				ORDER BY r.rolname";
+		$clause = '';
+		if ($this->conf()['show_system'] ?? false) {
+			$clause .= 'true';
 		} else {
-			$sql = "
-				SELECT r.rolname, r.rolsuper, r.rolinherit, r.rolcreaterole, r.rolcreatedb, 
-					   r.rolcanlogin, r.rolconnlimit, r.rolvaliduntil, r.rolconfig
-				FROM pg_catalog.pg_roles r
-				ORDER BY r.rolname";
+			$clause .= "r.rolname NOT LIKE 'pg_%'";
 		}
+		if (!empty($rolename)) {
+			$clause .= " AND r.rolname != '{$rolename}'";
+		}
+
+		$sql =
+			"SELECT r.rolname, r.rolsuper, r.rolinherit, r.rolcreaterole,
+				r.rolcreatedb, r.rolcanlogin, r.rolconnlimit, r.rolvaliduntil,
+				r.rolconfig,
+				shobj_description(r.oid, 'pg_authid') AS rolcomment
+			FROM pg_catalog.pg_roles r
+			WHERE {$clause}
+			ORDER BY r.rolname";
 
 		return $this->connection->selectSet($sql);
 	}
@@ -52,9 +56,10 @@ class RoleActions extends ActionsBase
 	{
 		$this->connection->clean($rolename);
 
-		$sql = "
-			SELECT r.rolname, r.rolsuper, r.rolinherit, r.rolcreaterole, r.rolcreatedb, 
-				   r.rolcanlogin, r.rolconnlimit, r.rolvaliduntil, r.rolconfig
+		$sql =
+			"SELECT r.rolname, r.rolsuper, r.rolinherit, r.rolcreaterole, r.rolcreatedb, 
+				   r.rolcanlogin, r.rolconnlimit, r.rolvaliduntil, r.rolconfig,
+				   shobj_description(r.oid, 'pg_authid') AS rolcomment
 			FROM pg_catalog.pg_roles r
 			WHERE r.rolname = '{$rolename}'";
 
@@ -171,7 +176,8 @@ class RoleActions extends ActionsBase
 		$expiry = '',
 		$memberof = [],
 		$members = [],
-		$adminmembers = []
+		$adminmembers = [],
+		$comment = ''
 	) {
 		$this->connection->fieldClean($rolename);
 
@@ -209,7 +215,7 @@ class RoleActions extends ActionsBase
 		else
 			$sql .= " NOLOGIN";
 
-		if ($connlimit != -1) {
+		if (!empty($connlimit) && $connlimit != -1) {
 			$sql .= " CONNECTION LIMIT {$connlimit}";
 		}
 
@@ -234,7 +240,29 @@ class RoleActions extends ActionsBase
 			$sql .= ' ADMIN "' . implode('", "', $adminmembers) . '"';
 		}
 
-		return $this->connection->execute($sql);
+		$status = $this->connection->beginTransaction();
+		if ($status != 0)
+			return -1;
+
+		$status = $this->connection->execute($sql);
+		if ($status != 0) {
+			$this->connection->rollbackTransaction();
+			return -2;
+		}
+
+		if ($comment != '') {
+			$status = $this->connection->setComment(
+				'ROLE',
+				$rolename,
+				null,
+				$comment
+			);
+			if ($status != 0) {
+				$this->connection->rollbackTransaction();
+				return -3;
+			}
+		}
+		return $this->connection->commitTransaction();
 	}
 
 	/**
@@ -256,7 +284,7 @@ class RoleActions extends ActionsBase
 	 * @param array $adminmembersold Old adminmembers array for change detection (optional)
 	 * @return 0 success
 	 */
-	public function setRole(
+	protected function setRole(
 		$rolename,
 		$password = '',
 		$superuser = 0,
@@ -434,7 +462,8 @@ class RoleActions extends ActionsBase
 		$adminmembers = [],
 		$memberofold = [],
 		$membersold = [],
-		$adminmembersold = []
+		$adminmembersold = [],
+		$comment = ''
 	) {
 		$status = $this->connection->beginTransaction();
 		if ($status != 0)
@@ -471,6 +500,19 @@ class RoleActions extends ActionsBase
 			return -2;
 		}
 
+		if ($comment != '') {
+			$status = $this->connection->setComment(
+				'ROLE',
+				$rolename,
+				null,
+				$comment
+			);
+			if ($status != 0) {
+				$this->connection->rollbackTransaction();
+				return -4;
+			}
+		}
+
 		return $this->connection->endTransaction();
 	}
 
@@ -489,145 +531,6 @@ class RoleActions extends ActionsBase
 	}
 
 	/**
-	 * Creates a user (legacy API - users are now roles)
-	 * @param string $username The username
-	 * @param string $password The password
-	 * @param int $createdb 1 if can create databases, 0 otherwise
-	 * @param int $createuser 1 if can create users, 0 otherwise
-	 * @param string $expiry User expiry date (optional)
-	 * @param array $groups Array of groups to add user to (optional)
-	 * @return 0 success
-	 */
-	public function createUser(
-		$username,
-		$password = '',
-		$createdb = 0,
-		$createuser = 0,
-		$expiry = '',
-		$groups = []
-	) {
-		// Legacy user creation maps to createRole
-		$superuser = 0;
-		$createrole = $createuser;
-		$inherits = 1;
-		$login = 1;
-		$connlimit = -1;
-		$memberof = [];
-		$members = [];
-		$adminmembers = [];
-
-		return $this->createRole(
-			$username,
-			$password,
-			$superuser,
-			$createdb,
-			$createrole,
-			$inherits,
-			$login,
-			$connlimit,
-			$expiry,
-			$memberof,
-			$members,
-			$adminmembers
-		);
-	}
-
-	/**
-	 * Renames a user (legacy API - users are now roles)
-	 * @param string $username The current username
-	 * @param string $newname The new username
-	 * @return 0 success
-	 */
-	public function renameUser($username, $newname)
-	{
-		return $this->renameRole($username, $newname);
-	}
-
-	/**
-	 * Updates user attributes (legacy API - users are now roles)
-	 * @param string $username The username
-	 * @param string $password The new password (optional)
-	 * @param int $createdb 1 if can create databases, 0 otherwise
-	 * @param int $createuser 1 if can create users, 0 otherwise
-	 * @param string $expiry User expiry date (optional)
-	 * @return 0 success
-	 */
-	public function setUser($username, $password = '', $createdb = 0, $createuser = 0, $expiry = '')
-	{
-		// Legacy user update maps to setRole
-		$superuser = 0;
-		$createrole = $createuser;
-		$inherits = 1;
-		$login = 1;
-		$connlimit = -1;
-
-		return $this->setRole(
-			$username,
-			$password,
-			$superuser,
-			$createdb,
-			$createrole,
-			$inherits,
-			$login,
-			$connlimit,
-			$expiry
-		);
-	}
-
-	/**
-	 * Renames a user and updates attributes (legacy API - users are now roles)
-	 * @param string $username The current username
-	 * @param string $password The new password (optional)
-	 * @param int $createdb 1 if can create databases, 0 otherwise
-	 * @param int $createuser 1 if can create users, 0 otherwise
-	 * @param string $expiry User expiry date (optional)
-	 * @param string $newname The new username
-	 * @return 0 success
-	 * @return -1 transaction error
-	 * @return -2 set user attributes error
-	 * @return -3 rename error
-	 */
-	public function setRenameUser(
-		$username,
-		$password = '',
-		$createdb = 0,
-		$createuser = 0,
-		$expiry = '',
-		$newname = ''
-	) {
-		$status = $this->connection->beginTransaction();
-		if ($status != 0)
-			return -1;
-
-		if ($username != $newname) {
-			$status = $this->renameUser($username, $newname);
-			if ($status != 0) {
-				$this->connection->rollbackTransaction();
-				return -3;
-			}
-			$username = $newname;
-		}
-
-		$status = $this->setUser($username, $password, $createdb, $createuser, $expiry);
-		if ($status != 0) {
-			$this->connection->rollbackTransaction();
-			return -2;
-		}
-
-		return $this->connection->endTransaction();
-	}
-
-	/**
-	 * Removes a user (legacy API - users are now roles)
-	 * @param string $username The username
-	 * @return int 0 success
-	 */
-	public function dropUser($username)
-	{
-		return $this->dropRole($username);
-	}
-
-	/**
 	 * Changes a role's password
 	 * @param string $rolename The role name
 	 * @param string $password The new password
@@ -639,22 +542,6 @@ class RoleActions extends ActionsBase
 		$this->connection->clean($password);
 
 		$sql = "ALTER ROLE \"{$rolename}\" WITH PASSWORD '{$password}'";
-
-		return $this->connection->execute($sql);
-	}
-
-	/**
-	 * Adds a user to a group
-	 * @param string $groname The name of the group
-	 * @param string $user The name of the user to add to the group
-	 * @return int 0 success
-	 */
-	public function addGroupMember($groname, $user)
-	{
-		$this->connection->fieldClean($groname);
-		$this->connection->fieldClean($user);
-
-		$sql = "ALTER GROUP \"{$groname}\" ADD USER \"{$user}\"";
 
 		return $this->connection->execute($sql);
 	}
@@ -700,39 +587,6 @@ class RoleActions extends ActionsBase
 	}
 
 	/**
-	 * Removes a user from a group
-	 * @param string $groname The name of the group
-	 * @param string $user The name of the user to remove from the group
-	 * @return int 0 success
-	 */
-	public function dropGroupMember($groname, $user)
-	{
-		$this->connection->fieldClean($groname);
-		$this->connection->fieldClean($user);
-
-		$sql = "ALTER GROUP \"{$groname}\" DROP USER \"{$user}\"";
-
-		return $this->connection->execute($sql);
-	}
-
-	/**
-	 * Return users in a specific group
-	 * @param string $groname The name of the group
-	 * @return ADORecordSet A recordset
-	 */
-	public function getGroup($groname)
-	{
-		$this->connection->clean($groname);
-
-		$sql = "
-			SELECT s.usename FROM pg_catalog.pg_user s, pg_catalog.pg_group g
-			WHERE g.groname='{$groname}' AND s.usesysid = ANY (g.grolist)
-			ORDER BY s.usename";
-
-		return $this->connection->selectSet($sql);
-	}
-
-	/**
 	 * Returns all groups in the database cluster
 	 * @return ADORecordSet A recordset
 	 */
@@ -741,40 +595,6 @@ class RoleActions extends ActionsBase
 		$sql = "SELECT groname FROM pg_group ORDER BY groname";
 
 		return $this->connection->selectSet($sql);
-	}
-
-	/**
-	 * Creates a new group
-	 * @param string $groname The name of the group
-	 * @param array $users An array of users to add to the group
-	 * @return int 0 success
-	 */
-	public function createGroup($groname, $users)
-	{
-		$this->connection->fieldClean($groname);
-
-		$sql = "CREATE GROUP \"{$groname}\"";
-
-		if (is_array($users) && count($users) > 0) {
-			$this->connection->fieldArrayClean($users);
-			$sql .= ' WITH USER "' . implode('", "', $users) . '"';
-		}
-
-		return $this->connection->execute($sql);
-	}
-
-	/**
-	 * Removes a group
-	 * @param string $groname The name of the group to drop
-	 * @return int 0 success
-	 */
-	public function dropGroup($groname)
-	{
-		$this->connection->fieldClean($groname);
-
-		$sql = "DROP GROUP \"{$groname}\"";
-
-		return $this->connection->execute($sql);
 	}
 
 	/**

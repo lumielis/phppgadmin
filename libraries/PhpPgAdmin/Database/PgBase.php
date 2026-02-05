@@ -441,6 +441,14 @@ abstract class PgBase extends AppContext
 	{
 		return $this->conn->CommitTrans() ? 0 : -1;
 	}
+	/**
+	 * Commit a transaction
+	 * @return int 0 success
+	 */
+	function commitTransaction()
+	{
+		return $this->conn->CommitTrans() ? 0 : -1;
+	}
 
 	/**
 	 * Roll back a transaction

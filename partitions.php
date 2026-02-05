@@ -995,6 +995,7 @@ function doDefault($msg = '')
             'icon' => field('icon'),
             'url' => "display.php?subject=table&amp;{$misc->href}&amp;",
             'vars' => ['table' => 'relname'],
+            'class' => 'nowrap',
         ],
         'bounds' => [
             'title' => $lang['strpartitionbounds'],
@@ -1014,12 +1015,43 @@ function doDefault($msg = '')
             'field' => field('+size'),
             'type' => 'html',
         ],
+        'owner' => [
+            'title' => $lang['strowner'],
+            'field' => field('relowner'),
+        ],
         'actions' => [
             'title' => $lang['stractions'],
         ],
         'comment' => [
             'title' => $lang['strcomment'],
             'field' => field('comment'),
+        ],
+    ];
+
+    $footer = [
+        'partition' => [
+            'agg' => 'count',
+            'format' => fn($v) => "$v {$lang['strpartitions']}",
+        ],
+        'bounds' => [
+            'text' => $lang['strtotal'],
+        ],
+        'rows' => [
+            'agg' => 'sum',
+            'type' => 'prettyint',
+            'class' => 'text-end',
+            'params' => ['class' => 'numeric'],
+        ],
+        'size' => [
+            'agg' => 'sum',
+            'type' => 'prettysize',
+            'class' => 'text-end',
+            'field' => field('size'),
+            //'params' => ['class' => 'numeric'],
+        ],
+        'actions' => [
+            'text' => '',
+            'colspan' => 2,
         ],
     ];
 
@@ -1034,6 +1066,7 @@ function doDefault($msg = '')
                     'urlvars' => [
                         'subject' => 'table',
                         'table' => field('relname'),
+                        'parent_table' => $_REQUEST['table'],
                     ],
                 ],
             ],
@@ -1064,6 +1097,20 @@ function doDefault($msg = '')
                 ],
             ],
         ],
+        'alter' => [
+            'icon' => $misc->icon('Edit'),
+            'content' => $lang['stredit'],
+            'attr' => [
+                'href' => [
+                    'url' => 'tblproperties.php',
+                    'urlvars' => [
+                        'action' => 'confirm_alter',
+                        'table' => field('relname'),
+                        'parent_table' => $_REQUEST['table'],
+                    ],
+                ],
+            ],
+        ],
         'drop' => [
             'icon' => $misc->icon('Delete'),
             'content' => $lang['strdrop'],
@@ -1073,6 +1120,7 @@ function doDefault($msg = '')
                     'urlvars' => [
                         'action' => 'confirm_drop',
                         'table' => field('relname'),
+                        'parent_table' => $_REQUEST['table'],
                     ],
                 ],
             ],
@@ -1090,7 +1138,8 @@ function doDefault($msg = '')
         $actions,
         'partitions-partitions',
         $lang['strnopartitions'],
-        $partPre
+        $partPre,
+        $footer
     );
 
     // Navigation links

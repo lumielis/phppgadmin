@@ -260,15 +260,24 @@ function doDefault($msg = '')
 		],
 		'actions' => [
 			'title' => $lang['stractions']
+		],
+		'comment' => [
+			'title' => $lang['strcomment'],
+			'field' => field('spccomment'),
 		]
 	];
 
-	if ($pg->hasSharedComments()) {
-		$columns['comment'] = [
-			'title' => $lang['strcomment'],
-			'field' => field('spccomment'),
-		];
-	}
+	$footer = [
+		'name' => [
+			'agg' => 'count',
+			'format' => fn($v) => "$v {$lang['strtablespaces']}",
+			'colspan' => 2,
+		],
+		'location' => [
+			'text' => $lang['strtotal'],
+			'colspan' => 3,
+		],
+	];
 
 	$actions = [
 		'alter' => [
@@ -320,7 +329,15 @@ function doDefault($msg = '')
 		return $actions;
 	};
 
-	$misc->printTable($tablespaces, $columns, $actions, 'tablespaces-tablespaces', $lang['strnotablespaces'], $preFnc);
+	$misc->printTable(
+		$tablespaces,
+		$columns,
+		$actions,
+		'tablespaces-tablespaces',
+		$lang['strnotablespaces'],
+		$preFnc,
+		$footer
+	);
 
 	$misc->printNavLinks([
 		'create' => [

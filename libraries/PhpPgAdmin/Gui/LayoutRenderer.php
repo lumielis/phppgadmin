@@ -61,40 +61,43 @@ class LayoutRenderer extends AppContext
 		echo "<!DOCTYPE html>\n";
 		echo '<html lang="' . $lang['applocale'] . '" dir="' . htmlspecialchars($lang['applangdir']) . '">';
 		echo "\n";
+		$cacheKey = 'v=' . urlencode(AppContainer::getAppVersion());
 		?>
 
 		<head>
 			<meta charset="utf-8" />
 			<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-			<link rel="stylesheet" href="js/lib/flatpickr/flatpickr.css" type="text/css">
-			<link rel="stylesheet" href="themes/<?= $conf['theme'] ?>/global.css" type="text/css" id="csstheme">
-			<link rel="icon" type="image/png" href="images/themes/<?= $conf['theme'] ?>/pgadmin.png" />
-			<script src="js/lib/jquery-3.7.1.min.js" type="text/javascript"></script>
-			<script src="js/core/xtree2.js" type="text/javascript"></script>
-			<script src="js/core/xloadtree2.js" type="text/javascript"></script>
-			<script src="js/lib/popper.js" defer type="text/javascript"></script>
-			<script src="js/lib/flatpickr/flatpickr.js" defer type="text/javascript"></script>
+			<link rel="stylesheet" href="js/lib/flatpickr/flatpickr.css?<?= $cacheKey ?>" type="text/css">
+			<link rel="stylesheet" href="themes/<?= $conf['theme'] ?>/global.css?<?= $cacheKey ?>" type="text/css"
+				id="csstheme">
+			<link rel="icon" type="image/png" href="images/themes/<?= $conf['theme'] ?>/pgadmin.png?<?= $cacheKey ?>" />
+			<script src="js/lib/jquery-3.7.1.min.js?<?= $cacheKey ?>" type="text/javascript"></script>
+			<script src="js/core/xtree2.js?<?= $cacheKey ?>" type="text/javascript"></script>
+			<script src="js/core/xloadtree2.js?<?= $cacheKey ?>" type="text/javascript"></script>
+			<script src="js/lib/popper.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/lib/flatpickr/flatpickr.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
 			<?php if ($langIso2 != 'en'): ?>
-				<script src="js/lib/flatpickr/l10n/<?= $langIso2 ?>.js" defer type="text/javascript"></script>
+				<script src="js/lib/flatpickr/l10n/<?= $langIso2 ?>.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
 			<?php endif ?>
-			<script src="js/lib/ace/src-min-noconflict/ace.js" defer type="text/javascript"></script>
-			<script src="js/lib/ace/src-min-noconflict/ext-language_tools.js" defer type="text/javascript"></script>
+			<script src="js/lib/ace/src-min-noconflict/ace.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/lib/ace/src-min-noconflict/ext-language_tools.js?<?= $cacheKey ?>" defer
+				type="text/javascript"></script>
 			<!--
 			<script src="js/lib/ace/src-min-noconflict/mode-pgsql.js" defer type="text/javascript"></script>
 			-->
 			<script src="js/lib/ace/src-min-noconflict/mode-json.js" defer type="text/javascript"></script>
 			<script src="js/lib/ace/src-min-noconflict/mode-xml.js" defer type="text/javascript"></script>
-			<script src="js/core/ace-mode-pgsql.js" defer type="text/javascript"></script>
-			<script src="js/core/ace-mode-plpgsql-lite.js" defer type="text/javascript"></script>
-			<script src="js/lib/lz-string/lz-string.js" defer type="text/javascript"></script>
-			<script src="js/lib/highlight/highlight.min.js" defer type="text/javascript"></script>
-			<script src="js/lib/highlight/languages/pgsql.min.js" defer type="text/javascript"></script>
-			<script src="js/lib/highlight/languages/json.min.js" defer type="text/javascript"></script>
-			<script src="js/lib/highlight/languages/xml.min.js" defer type="text/javascript"></script>
-			<script src="js/core/frameset.js" defer type="text/javascript"></script>
-			<script src="js/core/misc.js" defer type="text/javascript"></script>
-			<script src="js/core/autocomplete-fk.js" defer type="text/javascript"></script>
-			<script src="js/core/sql-completer.js" defer type="text/javascript"></script>
+			<script src="js/core/ace-mode-pgsql.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/core/ace-mode-plpgsql-lite.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/lib/lz-string/lz-string.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/lib/highlight/highlight.min.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/lib/highlight/languages/pgsql.min.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/lib/highlight/languages/json.min.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/lib/highlight/languages/xml.min.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/core/frameset.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/core/misc.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/core/autocomplete-fk.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
+			<script src="js/core/sql-completer.js?<?= $cacheKey ?>" defer type="text/javascript"></script>
 			<style>
 				.webfx-tree-children {
 					background-image: url("<?= $this->misc->icon('I') ?> ");
@@ -479,10 +482,16 @@ EOT;
 		$conf = $this->conf();
 
 		// Shortcircuit for a NULL value
-		if ($str === null)
-			return isset($params['null'])
-				? ($params['null'] === true ? '<i class="null">NULL</i>' : $params['null'])
-				: '';
+		if ($str === null) {
+			if (isset($params['null'])) {
+				if ($params['null'] === true) {
+					return '<i class="null">NULL</i>';
+				} else {
+					return $params['null'];
+				}
+			}
+			return '';
+		}
 
 		if (isset($params['map']) && isset($params['map'][$str]))
 			$str = $params['map'][$str];

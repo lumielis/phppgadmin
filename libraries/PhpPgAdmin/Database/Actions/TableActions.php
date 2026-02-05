@@ -62,7 +62,7 @@ class TableActions extends ActionsBase
                 {$extraPartitionCols}
                 c.relname,
                 n.nspname,
-                u.usename AS relowner,
+                pg_catalog.pg_get_userbyid(c.relowner) AS relowner,
                 c.oid,
                 c.relkind,
                 c.relacl,
@@ -72,7 +72,6 @@ class TableActions extends ActionsBase
                 WHERE pt.oid = c.reltablespace) AS tablespace
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
-            LEFT JOIN pg_user u ON u.usesysid = c.relowner
             {$extraPartitionJoins}
             WHERE c.relkind IN ('r', 'p')
             AND n.nspname = '{$schema}'
@@ -119,25 +118,43 @@ class TableActions extends ActionsBase
         static $cache = [];
         $this->connection->clean($schema);
         $this->connection->clean($table);
+
         $cacheKey = $schema . '.' . $table;
-        if (isset($cache[$cacheKey])) {
-            $type = $cache[$cacheKey];
-        } else {
-            $sql = "SELECT c.relkind
-            FROM pg_catalog.pg_class c
-            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = '$schema'
-              AND c.relname = '$table'";
-            $type = $this->connection->selectField($sql, 'relkind');
-            $cache[$cacheKey] = $type;
+        if (!isset($cache[$cacheKey])) {
+            $partitionField = '';
+            if ($this->connection->major_version >= 10) {
+                $partitionField = ', c.relispartition';
+            }
+            $sql =
+                "SELECT c.relkind $partitionField
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = '$schema'
+                AND c.relname = '$table'";
+            $rs = $this->connection->selectSet($sql);
+
+            $cache[$cacheKey] = $rs->fields ?? [];
         }
-        if ($type == 'r' || $type == 'f') {
+
+        $info = $cache[$cacheKey];
+        $type = $info['relkind'] ?? 'r';
+
+        if ($type == 'r') {
+            if ($detailed && ($info['relispartition'] ?? null) == 't') {
+                return 'partition';
+            }
             return 'table';
+        }
+        if ($type == 'f') {
+            return $detailed ? 'foreign_table' : 'table';
         }
         if ($type == 'p') {
             return $detailed ? 'partitioned_table' : 'table';
         }
-        if ($type == 'v' || $type == 'm') {
+        if ($type == 'm') {
+            return $detailed ? 'materialized_view' : 'view';
+        }
+        if ($type == 'v') {
             return 'view';
         }
         return null;

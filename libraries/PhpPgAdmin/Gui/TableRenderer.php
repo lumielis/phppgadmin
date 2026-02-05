@@ -228,7 +228,12 @@ class TableRenderer extends AppContext
                     default:
                         echo "<td$classAttr>";
                         $val = value($column['field'], $tabledata->fields);
-                        if ($val !== null) {
+                        $val = $this->misc()->formatVal(
+                            $val,
+                            $column['type'] ?? 'text',
+                            $column['params'] ?? []
+                        );
+                        if ($val !== null && $val !== '') {
                             if (isset($column['url'])) {
                                 echo "<a href=\"{$column['url']}";
                                 $this->misc()->printUrlVars($column['vars'], $tabledata->fields);
@@ -240,11 +245,7 @@ class TableRenderer extends AppContext
                                 $icon = $this->misc()->icon($icon) ?: $icon;
                                 echo '<img src="' . htmlspecialchars($icon) . '" class="icon" alt="" />';
                             }
-                            echo $this->misc()->formatVal(
-                                $val,
-                                $column['type'] ?? 'text',
-                                $column['params'] ?? []
-                            );
+                            echo $val;
                             if (isset($column['url'])) {
                                 echo "</a>";
                             }

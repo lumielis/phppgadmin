@@ -138,12 +138,22 @@ class TrailRenderer extends AppContext
                 $_REQUEST['table'],
                 true
             );
+            switch ($tableType) {
+                case 'partitioned_table':
+                    $icon = 'PartitionedTable';
+                    break;
+                case 'partition':
+                    $icon = 'Partition';
+                    break;
+                default:
+                    $icon = 'Table';
+            }
             $trail['table'] = [
                 'title' => $lang['strtable'],
                 'text' => $_REQUEST['table'],
                 'url' => $this->misc()->getHREFSubject('table'),
                 'help' => 'pg.table',
-                'icon' => $tableType === 'partitioned_table' ? 'PartitionedTable' : 'Table'
+                'icon' => $icon
             ];
         } elseif (isset($_REQUEST['view']) && !$done) {
             $viewActions = new ViewActions($this->postgres());

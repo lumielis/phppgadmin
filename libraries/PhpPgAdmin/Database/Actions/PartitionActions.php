@@ -73,6 +73,7 @@ class PartitionActions extends ActionsBase
                 pg_get_expr(c.relpartbound, c.oid) AS partition_bound,
                 c.reltuples::bigint,
                 pg_relation_size(c.oid) AS size,
+                pg_catalog.pg_get_userbyid(c.relowner) AS relowner,
                 pg_catalog.obj_description(c.oid, 'pg_class') AS comment
             FROM pg_class c
             JOIN pg_inherits i ON i.inhrelid = c.oid
