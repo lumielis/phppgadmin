@@ -817,7 +817,6 @@ function doDefault($msg = '')
 
 	$renderRoleExpires = function ($val) {
 		$lang = AppContainer::getLang();
-		var_dump($val);
 		if ($val == '' || $val == 'infinity')
 			return $lang['strnever'];
 		return html_esc($val);
