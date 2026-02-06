@@ -828,6 +828,10 @@ class RowBrowserRenderer extends AppContext
                 $type = 'bytea';
             } else {
                 $class = $editClass;
+                if ($type == 'tsvector') {
+                    // tsvector columns are not editable at the moment (too complex to edit in-place, and no edit page yet)
+                    $class = "";
+                }
             }
             if (!$collapsed) {
                 $isArray = substr_compare($finfo->type, '_', 0, 1) === 0;
