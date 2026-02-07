@@ -232,48 +232,70 @@ class DatabaseActions extends ActionsBase
 
     /**
      * Get database statistics including sessions, transactions, tuples, and block I/O
-     * Returns data from pg_stat_activity and pg_stat_database for the current database
-     * 
+     * Works with PostgreSQL 9.0+ (handles absence of pg_stat_activity.state in < 9.2)
+     *
      * @return array Array with keys: sessions, transactions, tuples_in, tuples_out, blocks, timestamp
      */
     public function getDatabaseStats()
     {
         $stats = [
             'timestamp' => microtime(true),
-            'sessions' => ['total' => 0, 'active' => 0, 'idle' => 0],
+            'sessions' => ['total' => 0, 'active' => 0, 'idle' => 0, 'idle_in_xact' => 0],
             'transactions' => ['commits' => 0, 'rollbacks' => 0],
             'tuples_in' => ['inserts' => 0, 'updates' => 0, 'deletes' => 0],
             'tuples_out' => ['fetched' => 0, 'returned' => 0],
             'blocks' => ['reads' => 0, 'hits' => 0]
         ];
 
-        // Get session statistics from pg_stat_activity
-        $sql = "SELECT state, count(*) as count 
-                FROM pg_stat_activity 
+        // Get session counts from pg_stat_activity
+        if ($this->connection->major_version >= 9.2) {
+            // Postgres >= 9.2: use state column for accurate session states
+            $sql = "SELECT state, count(*) AS count
+                FROM pg_stat_activity
                 WHERE datname = current_database()
                 GROUP BY state";
-        $result = $this->connection->selectSet($sql);
+            $result = $this->connection->selectSet($sql);
 
-        if ($result && $result->recordCount() > 0) {
-            while (!$result->EOF) {
-                $state = $result->fields['state'];
-                $count = (int) $result->fields['count'];
-                $stats['sessions']['total'] += $count;
+            if ($result && $result->recordCount() > 0) {
+                while (!$result->EOF) {
+                    $state = $result->fields['state'] ?? null;
+                    $count = (int) $result->fields['count'];
+                    $stats['sessions']['total'] += $count;
 
-                if ($state === 'active') {
-                    $stats['sessions']['active'] = $count;
-                } elseif ($state === 'idle') {
-                    $stats['sessions']['idle'] = $count;
+                    if ($state === 'active') {
+                        $stats['sessions']['active'] = $count;
+                    } elseif ($state === 'idle') {
+                        $stats['sessions']['idle'] = $count;
+                    } elseif ($state === 'idle in transaction') {
+                        $stats['sessions']['idle_in_xact'] = $count;
+                    }
+                    $result->moveNext();
                 }
-                $result->moveNext();
+            }
+        } else {
+            // PostgreSQL 9.0 / 9.1: no state column, use current_query values
+            $sql = "SELECT
+                    sum(CASE WHEN current_query NOT IN ('<IDLE>', '<IDLE> in transaction') THEN 1 ELSE 0 END) AS active,
+                    sum(CASE WHEN current_query = '<IDLE>' THEN 1 ELSE 0 END) AS idle,
+                    sum(CASE WHEN current_query = '<IDLE> in transaction' THEN 1 ELSE 0 END) AS idle_in_xact,
+                    count(*) AS total
+                FROM pg_stat_activity
+                WHERE datname = current_database()";
+            $result = $this->connection->selectSet($sql);
+
+            if ($result && $result->recordCount() > 0) {
+                $stats['sessions']['active'] = (int) $result->fields['active'];
+                $stats['sessions']['idle'] = (int) $result->fields['idle'];
+                $stats['sessions']['idle_in_xact'] = (int) $result->fields['idle_in_xact'];
+                $stats['sessions']['total'] = (int) $result->fields['total'];
             }
         }
 
-        // Get database statistics from pg_stat_database
-        $sql = "SELECT xact_commit, xact_rollback, tup_returned, tup_fetched, 
-                       tup_inserted, tup_updated, tup_deleted, blks_read, blks_hit
-                FROM pg_stat_database 
-                WHERE datname = current_database()";
+        // Get database statistics from pg_stat_database (works in 9.0+)
+        $sql = "SELECT xact_commit, xact_rollback, tup_returned, tup_fetched,
+                   tup_inserted, tup_updated, tup_deleted, blks_read, blks_hit
+            FROM pg_stat_database
+            WHERE datname = current_database()";
         $result = $this->connection->selectSet($sql);
 
         if ($result && $result->recordCount() > 0) {
