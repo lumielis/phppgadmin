@@ -88,15 +88,6 @@
 				labels: dataHistory.labels,
 				datasets: [
 					{
-						label: Database.lang.total,
-						data: dataHistory.sessions.total,
-						borderColor: COLORS.blue,
-						backgroundColor: COLORS.blue,
-						tension: 0.4,
-						borderWidth: 1,
-						radius: 2,
-					},
-					{
 						label: Database.lang.active,
 						data: dataHistory.sessions.active,
 						borderColor: COLORS.orange,
@@ -110,6 +101,15 @@
 						data: dataHistory.sessions.idle,
 						borderColor: COLORS.green,
 						backgroundColor: COLORS.green,
+						tension: 0.4,
+						borderWidth: 1,
+						radius: 2,
+					},
+					{
+						label: Database.lang.total,
+						data: dataHistory.sessions.total,
+						borderColor: COLORS.blue,
+						backgroundColor: COLORS.blue,
 						tension: 0.4,
 						borderWidth: 1,
 						radius: 2,
@@ -417,9 +417,9 @@
 
 		// Update Chart.js data
 		updateChartData(charts.sessions, dataHistory.labels, [
-			dataHistory.sessions.total,
 			dataHistory.sessions.active,
 			dataHistory.sessions.idle,
+			dataHistory.sessions.total,
 		]);
 
 		updateChartData(charts.transactions, dataHistory.labels, [
